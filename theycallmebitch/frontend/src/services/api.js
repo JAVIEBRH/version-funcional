@@ -1,7 +1,8 @@
 // src/services/api.js
 // Funciones para consumir la API del backend (FastAPI)
 
-const API_URL = 'http://localhost:8000';
+// URL dinámica que funciona en desarrollo y producción
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export async function getPedidos() {
   const res = await fetch(`${API_URL}/pedidos`);

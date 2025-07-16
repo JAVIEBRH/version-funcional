@@ -7,10 +7,15 @@ from datetime import datetime
 
 app = FastAPI(title="Aguas Ancud API", description="Backend para dashboard de Aguas Ancud")
 
-# Permitir acceso desde cualquier origen (para desarrollo)
+# Configuración de CORS para desarrollo y producción
+import os
+
+# Obtener origen permitido desde variable de entorno o usar valor por defecto
+CORS_ORIGIN = os.getenv("CORS_ORIGIN", "http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[CORS_ORIGIN, "http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
