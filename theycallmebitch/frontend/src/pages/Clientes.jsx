@@ -23,80 +23,34 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Tooltip
+  Tooltip,
+  Alert,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import AddIcon from '@mui/icons-material/Add';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import PhoneIcon from '@mui/icons-material/Phone';
-import EmailIcon from '@mui/icons-material/Email';
+import { 
+  Search as SearchIcon, 
+  FilterList as FilterListIcon, 
+  Add, 
+  MoreVert as MoreVertIcon, 
+  LocationOn as LocationOnIcon, 
+  Phone as PhoneIcon, 
+  Email as EmailIcon, 
+  Warning, 
+  Error, 
+  Info, 
+  CheckCircle,
+  TrendingDown,
+  TrendingUp,
+  Schedule,
+  LocalShipping,
+  AttachMoney
+} from '@mui/icons-material';
 import { getClientes, getPedidos } from '../services/api';
 
-// Datos de ejemplo para clientes
-const mockClientes = [
-  {
-    id: 1,
-    nombre: 'Juan Pérez',
-    email: 'juan.perez@email.com',
-    telefono: '+56 9 1234 5678',
-    direccion: 'Av. Principal 123, Ancud',
-    estado: 'Activo',
-    pedidos: 15,
-    total_comprado: 250000,
-    ultimo_pedido: '2024-01-10',
-    tipo: 'VIP'
-  },
-  {
-    id: 2,
-    nombre: 'María González',
-    email: 'maria.gonzalez@email.com',
-    telefono: '+56 9 2345 6789',
-    direccion: 'Calle Secundaria 456, Ancud',
-    estado: 'Activo',
-    pedidos: 8,
-    total_comprado: 180000,
-    ultimo_pedido: '2024-01-08',
-    tipo: 'Regular'
-  },
-  {
-    id: 3,
-    nombre: 'Carlos Silva',
-    email: 'carlos.silva@email.com',
-    telefono: '+56 9 3456 7890',
-    direccion: 'Plaza Central 789, Ancud',
-    estado: 'Inactivo',
-    pedidos: 3,
-    total_comprado: 45000,
-    ultimo_pedido: '2023-12-15',
-    tipo: 'Regular'
-  },
-  {
-    id: 4,
-    nombre: 'Ana Rodríguez',
-    email: 'ana.rodriguez@email.com',
-    telefono: '+56 9 4567 8901',
-    direccion: 'Calle Nueva 321, Ancud',
-    estado: 'Activo',
-    pedidos: 22,
-    total_comprado: 420000,
-    ultimo_pedido: '2024-01-12',
-    tipo: 'VIP'
-  },
-  {
-    id: 5,
-    nombre: 'Luis Martínez',
-    email: 'luis.martinez@email.com',
-    telefono: '+56 9 5678 9012',
-    direccion: 'Av. Costera 654, Ancud',
-    estado: 'Activo',
-    pedidos: 12,
-    total_comprado: 195000,
-    ultimo_pedido: '2024-01-05',
-    tipo: 'Regular'
-  }
-];
+// Los datos de clientes ahora se obtienen del backend
 
 // Función para parsear fechas DD-MM-YYYY a Date con validación mejorada
 function parseFecha(fechaStr) {
@@ -104,7 +58,7 @@ function parseFecha(fechaStr) {
   
   try {
     // Si ya es ISO o YYYY-MM-DD, validar y crear Date
-    if (/\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
       const fecha = new Date(fechaStr);
       // Verificar que la fecha es válida
       if (isNaN(fecha.getTime())) return null;
@@ -112,7 +66,7 @@ function parseFecha(fechaStr) {
     }
     
     // Si es DD-MM-YYYY
-    const match = fechaStr.match(/(\d{2})-(\d{2})-(\d{4})/);
+    const match = fechaStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
     if (match) {
       const [_, d, m, y] = match;
       const fecha = new Date(`${y}-${m}-${d}`);
@@ -260,7 +214,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
       }
       } catch (error) {
         console.error('Error cargando datos:', error);
-        setClientes(mockClientes);
+        setClientes([]);
         setPedidos([]);
       } finally {
         setLoading(false);
@@ -355,13 +309,33 @@ export default function Clientes({ refreshTrigger = 0 }) {
       // Calcular bidones por pedido (asumiendo cada pedido es por 1 o más bidones de 20L, y precio unitario 2000)
       const totalBidones = compras.total ? Math.round(compras.total / 2000) : 0;
       const bidonesPorPedido = compras.frecuencia > 0 ? (totalBidones / compras.frecuencia) : 0;
+      
+      // Usar la fecha más reciente entre compras.ultimo y cliente.ultimo_pedido
+      const fechaCompras = compras.ultimo || '';
+      const fechaCliente = cliente.ultimo_pedido || '';
+      const fechaFinal = fechaCompras && fechaCliente ? 
+        (new Date(fechaCompras) > new Date(fechaCliente) ? fechaCompras : fechaCliente) :
+        (fechaCompras || fechaCliente);
+      
       // Calcular estado funcional usando función unificada
-      const estado = calcularEstadoCliente(compras.ultimo || cliente.ultimo_pedido);
+      const estado = calcularEstadoCliente(fechaFinal);
+      
+      // Debug para Walker Martinez
+      if (cliente.nombre && cliente.nombre.toLowerCase().includes('walker')) {
+        console.log('Walker en lista VIP:', {
+          nombre: cliente.nombre,
+          fechaCompras: fechaCompras,
+          fechaCliente: fechaCliente,
+          fechaFinal: fechaFinal,
+          estado: estado
+        });
+      }
+      
       return {
         ...cliente,
         total_comprado: compras.total,
         pedidos: compras.frecuencia,
-        ultimo_pedido: compras.ultimo || cliente.ultimo_pedido || '',
+        ultimo_pedido: fechaFinal,
         bidonesPorPedido: bidonesPorPedido,
         estado: estado
       };
@@ -869,7 +843,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
 
               <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                startIcon={<Add />}
                 sx={{
                   bgcolor: '#10b981',
                   '&:hover': { bgcolor: '#059669' },
@@ -1441,6 +1415,234 @@ export default function Clientes({ refreshTrigger = 0 }) {
             </CardContent>
           </Card>
         </Box>
+      </Box>
+
+      {/* 🔔 SECCIÓN DE ALERTAS INTELIGENTES */}
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h5" sx={{ 
+          fontWeight: 700, 
+          color: '#1e293b', 
+          mb: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <Warning sx={{ color: '#f59e0b' }} />
+          Alertas Inteligentes
+        </Typography>
+
+        <Grid container spacing={3}>
+          {/* Alertas de Clientes Inactivos */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ 
+              bgcolor: '#fff', 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
+              borderRadius: 3, 
+              border: '1px solid #f1f5f9',
+              height: '100%'
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                  <Error sx={{ color: '#dc2626', fontSize: 28 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                    Clientes en Riesgo
+                  </Typography>
+                </Box>
+
+                {clientesConEstado.filter(c => c.estado === 'Inactivo').slice(0, 5).map((cliente, index) => (
+                  <Alert 
+                    key={index}
+                    severity="warning" 
+                    sx={{ mb: 2 }}
+                    action={
+                      <Button color="inherit" size="small">
+                        Contactar
+                      </Button>
+                    }
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {cliente.nombre || cliente.direccion}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+                      Último pedido: {cliente.ultimo_pedido || 'N/A'}
+                    </Typography>
+                  </Alert>
+                ))}
+
+                {clientesConEstado.filter(c => c.estado === 'Inactivo').length === 0 && (
+                  <Alert severity="success">
+                    ¡Excelente! No hay clientes inactivos.
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Alertas de Demanda */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ 
+              bgcolor: '#fff', 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
+              borderRadius: 3, 
+              border: '1px solid #f1f5f9',
+              height: '100%'
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                  <TrendingDown sx={{ color: '#f59e0b', fontSize: 28 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                    Análisis de Demanda
+                  </Typography>
+                </Box>
+
+                {/* Calcular métricas de demanda */}
+                {(() => {
+                  const clientesActivos = clientesConEstado.filter(c => c.estado === 'Activo');
+                  const clientesInactivos = clientesConEstado.filter(c => c.estado === 'Inactivo');
+                  const tasaActividad = clientesActivos.length / (clientesActivos.length + clientesInactivos.length) * 100;
+                  
+                  return (
+                    <>
+                      <Alert 
+                        severity={tasaActividad >= 70 ? "success" : tasaActividad >= 50 ? "warning" : "error"}
+                        sx={{ mb: 2 }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          Tasa de Actividad: {tasaActividad.toFixed(1)}%
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>
+                          {clientesActivos.length} activos / {clientesInactivos.length} inactivos
+                        </Typography>
+                      </Alert>
+
+                      {clientesInactivos.length > clientesActivos.length * 0.3 && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            Alta tasa de inactividad detectada
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#64748b' }}>
+                            Considerar campaña de reactivación
+                          </Typography>
+                        </Alert>
+                      )}
+
+                      {clientesActivos.length > 0 && (
+                        <Alert severity="info">
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            Oportunidad de crecimiento
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#64748b' }}>
+                            {clientesInactivos.length} clientes potenciales para reactivar
+                          </Typography>
+                        </Alert>
+                      )}
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Alertas de Rendimiento */}
+          <Grid item xs={12}>
+            <Card sx={{ 
+              bgcolor: '#fff', 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
+              borderRadius: 3, 
+              border: '1px solid #f1f5f9'
+            }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                  <AttachMoney sx={{ color: '#059669', fontSize: 28 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                    Análisis de Rendimiento
+                  </Typography>
+                </Box>
+
+                <Grid container spacing={3}>
+                  {/* Métricas de rendimiento */}
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: '#059669' }}>
+                        {clientesVIP.length}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        Clientes VIP
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: '#3b82f6' }}>
+                        {clientesFrecuencia.length}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        Clientes Frecuentes
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                      <Typography variant="h4" sx={{ fontWeight: 800, color: '#f59e0b' }}>
+                        {cantidadVIPyFrecuencia}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        VIP + Frecuentes
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+
+                {/* Recomendaciones */}
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+                    Recomendaciones Automáticas
+                  </Typography>
+                  
+                  <List>
+                    {clientesVIP.length < 10 && (
+                      <ListItem>
+                        <ListItemIcon>
+                          <TrendingUp sx={{ color: '#059669' }} />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Desarrollar programa VIP"
+                          secondary="Menos de 10 clientes VIP detectados"
+                        />
+                      </ListItem>
+                    )}
+
+                    {clientesInactivos.length > 20 && (
+                      <ListItem>
+                        <ListItemIcon>
+                          <Schedule sx={{ color: '#f59e0b' }} />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Campaña de reactivación urgente"
+                          secondary={`${clientesInactivos.length} clientes inactivos`}
+                        />
+                      </ListItem>
+                    )}
+
+                    {cantidadVIPyFrecuencia > 0 && (
+                      <ListItem>
+                        <ListItemIcon>
+                          <CheckCircle sx={{ color: '#059669' }} />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Clientes de alto valor identificados"
+                          secondary={`${cantidadVIPyFrecuencia} clientes VIP y frecuentes`}
+                        />
+                      </ListItem>
+                    )}
+                  </List>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       </Box>
 
       {/* Menú de acciones */}

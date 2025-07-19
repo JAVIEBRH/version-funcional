@@ -1,16 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
+import { getPedidosPorHorario } from '../services/api';
 
 const PedidosPorBloqueDonut = ({ 
-  pedidosManana = 45, 
-  pedidosTarde = 33,
+  pedidosManana = 0, 
+  pedidosTarde = 0,
   title = 'Pedidos por Horario'
 }) => {
   const theme = useTheme();
+  const [horarioData, setHorarioData] = useState({
+    pedidos_manana: pedidosManana,
+    pedidos_tarde: pedidosTarde,
+    total: pedidosManana + pedidosTarde,
+    porcentaje_manana: 0,
+    porcentaje_tarde: 0
+  });
+  const [loading, setLoading] = useState(false);
   
-  const total = pedidosManana + pedidosTarde;
-  const porcentajeManana = total > 0 ? Math.round((pedidosManana / total) * 100) : 0;
-  const porcentajeTarde = total > 0 ? Math.round((pedidosTarde / total) * 100) : 0;
+  const fetchPedidosPorHorario = async () => {
+    try {
+      setLoading(true);
+      const data = await getPedidosPorHorario();
+      setHorarioData({
+        pedidos_manana: data.pedidos_manana || 0,
+        pedidos_tarde: data.pedidos_tarde || 0,
+        total: data.total || 0,
+        porcentaje_manana: data.porcentaje_manana || 0,
+        porcentaje_tarde: data.porcentaje_tarde || 0
+      });
+    } catch (error) {
+      console.error('Error obteniendo pedidos por horario:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPedidosPorHorario();
+    
+    // Actualizar cada 15 minutos
+    const interval = setInterval(fetchPedidosPorHorario, 15 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  const total = horarioData.pedidos_manana + horarioData.pedidos_tarde;
+  const porcentajeManana = total > 0 ? horarioData.porcentaje_manana : 0;
+  const porcentajeTarde = total > 0 ? horarioData.porcentaje_tarde : 0;
   
   const radius = 60;
   const strokeWidth = 12;
@@ -35,7 +71,9 @@ const PedidosPorBloqueDonut = ({
       transition: 'all 0.3s ease',
       position: 'relative',
       overflow: 'hidden'
-    }}>
+    }}
+    onClick={fetchPedidosPorHorario}
+    >
       <div style={{ 
         fontSize: '1.125rem', 
         fontWeight: 700, 
@@ -50,6 +88,7 @@ const PedidosPorBloqueDonut = ({
         textRendering: 'optimizeLegibility'
       }}>
         {title}
+        {loading && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#9370db' }}>🔄</span>}
       </div>
       
       <div style={{ 
@@ -205,51 +244,45 @@ const PedidosPorBloqueDonut = ({
           ? 'rgba(147, 112, 219, 0.2)' 
           : 'rgba(147, 112, 219, 0.1)'}`
       }}>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{
+          textAlign: 'center',
+          flex: 1
+        }}>
           <div style={{
             fontSize: '1.25rem',
             fontWeight: 700,
             color: '#3b82f6',
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
+            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
           }}>
-            {pedidosManana}
+            {horarioData.pedidos_manana}
           </div>
           <div style={{
             fontSize: '0.75rem',
             color: theme.palette.text.secondary,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
+            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
           }}>
-            Mañana
+            11-13h
           </div>
         </div>
         
-        <div style={{ textAlign: 'center' }}>
+        <div style={{
+          textAlign: 'center',
+          flex: 1
+        }}>
           <div style={{
             fontSize: '1.25rem',
             fontWeight: 700,
             color: '#10b981',
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
+            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
           }}>
-            {pedidosTarde}
+            {horarioData.pedidos_tarde}
           </div>
           <div style={{
             fontSize: '0.75rem',
             color: theme.palette.text.secondary,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
+            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
           }}>
-            Tarde
+            15-19h
           </div>
         </div>
       </div>

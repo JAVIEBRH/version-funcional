@@ -1,14 +1,110 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
+import { getPedidos } from '../services/api';
 
 const VentasSemanalesCard = ({ 
   title = 'Ventas Semanales', 
-  value = 3125000, 
+  value = 0, 
   subtitle = 'Esta semana',
-  percentageChange = 8.3,
+  percentageChange = 0,
   isPositive = true 
 }) => {
   const theme = useTheme();
+  const [ventasData, setVentasData] = useState({
+    ventas_semana_actual: value,
+    porcentaje_cambio: percentageChange,
+    es_positivo: isPositive,
+    fecha_inicio_semana: '',
+    fecha_fin_semana: ''
+  });
+  const [loading, setLoading] = useState(false);
+  
+  const calcularVentasSemanales = async () => {
+    try {
+      setLoading(true);
+      const pedidos = await getPedidos();
+      
+      // Calcular fechas de semana actual
+      const hoy = new Date();
+      const inicioSemana = new Date(hoy);
+      inicioSemana.setDate(hoy.getDate() - hoy.getDay() + 1); // Lunes
+      const finSemana = new Date(inicioSemana);
+      finSemana.setDate(inicioSemana.getDate() + 6); // Domingo
+      
+      // Calcular fechas de semana pasada
+      const inicioSemanaPasada = new Date(inicioSemana);
+      inicioSemanaPasada.setDate(inicioSemana.getDate() - 7);
+      const finSemanaPasada = new Date(finSemana);
+      finSemanaPasada.setDate(finSemana.getDate() - 7);
+      
+      // Función para convertir fecha a formato DD-MM-YYYY
+      const formatearFecha = (fecha) => {
+        return fecha.toLocaleDateString('es-CL', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        });
+      };
+      
+      // Función para verificar si una fecha está en un rango
+      const fechaEnRango = (fechaStr, inicio, fin) => {
+        const fecha = new Date(fechaStr.split('-').reverse().join('-'));
+        return fecha >= inicio && fecha <= fin;
+      };
+      
+      // Filtrar pedidos de semana actual
+      const pedidosSemanaActual = pedidos.filter(pedido => {
+        return fechaEnRango(pedido.fecha, inicioSemana, finSemana);
+      });
+      
+      const ventasSemanaActual = pedidosSemanaActual.reduce((total, pedido) => {
+        return total + (parseInt(pedido.precio) || 0);
+      }, 0);
+      
+      // Filtrar pedidos de semana pasada
+      const pedidosSemanaPasada = pedidos.filter(pedido => {
+        return fechaEnRango(pedido.fecha, inicioSemanaPasada, finSemanaPasada);
+      });
+      
+      const ventasSemanaPasada = pedidosSemanaPasada.reduce((total, pedido) => {
+        return total + (parseInt(pedido.precio) || 0);
+      }, 0);
+      
+      // Calcular porcentaje de cambio
+      let porcentajeCambio = 0;
+      let esPositivo = true;
+      
+      if (ventasSemanaPasada > 0) {
+        porcentajeCambio = ((ventasSemanaActual - ventasSemanaPasada) / ventasSemanaPasada) * 100;
+        esPositivo = ventasSemanaActual >= ventasSemanaPasada;
+      } else if (ventasSemanaActual > 0) {
+        porcentajeCambio = 100;
+        esPositivo = true;
+      }
+      
+      setVentasData({
+        ventas_semana_actual: ventasSemanaActual,
+        porcentaje_cambio: porcentajeCambio,
+        es_positivo: esPositivo,
+        fecha_inicio_semana: formatearFecha(inicioSemana),
+        fecha_fin_semana: formatearFecha(finSemana)
+      });
+      
+    } catch (error) {
+      console.error('Error calculando ventas semanales:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    calcularVentasSemanales();
+    
+    // Actualizar cada 10 minutos
+    const interval = setInterval(calcularVentasSemanales, 10 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   const formatValue = (val) => {
     if (val >= 1000000) {
@@ -18,6 +114,13 @@ const VentasSemanalesCard = ({
     } else {
       return `$${val.toLocaleString('es-CL')}`;
     }
+  };
+
+  const getSubtitle = () => {
+    if (ventasData.fecha_inicio_semana && ventasData.fecha_fin_semana) {
+      return `${ventasData.fecha_inicio_semana} - ${ventasData.fecha_fin_semana}`;
+    }
+    return subtitle;
   };
 
   return (
@@ -39,7 +142,9 @@ const VentasSemanalesCard = ({
         : 'rgba(147, 112, 219, 0.1)'}`,
       position: 'relative',
       overflow: 'hidden'
-    }}>
+    }}
+    onClick={calcularVentasSemanales}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div style={{ flex: 1 }}>
           <div style={{ 
@@ -51,6 +156,7 @@ const VentasSemanalesCard = ({
             letterSpacing: '0.05em'
           }}>
             {title}
+            {loading && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#9370db' }}>🔄</span>}
           </div>
           <div style={{ 
             fontSize: '2.5rem', 
@@ -60,14 +166,14 @@ const VentasSemanalesCard = ({
             fontFamily: '"Roboto", "Helvetica Neue", Arial, sans-serif',
             lineHeight: 1.1
           }}>
-            {formatValue(value)}
+            {formatValue(ventasData.ventas_semana_actual)}
           </div>
           <div style={{ 
             fontSize: '0.875rem', 
             color: theme.palette.text.secondary,
             fontWeight: 500
           }}>
-            {subtitle}
+            {getSubtitle()}
           </div>
         </div>
         <div style={{
@@ -77,15 +183,15 @@ const VentasSemanalesCard = ({
           borderRadius: 12,
           padding: '8px 12px',
           fontSize: '0.875rem',
-          color: isPositive ? '#059669' : '#dc2626',
+          color: ventasData.es_positivo ? '#059669' : '#dc2626',
           fontWeight: 600,
-          border: `1px solid ${isPositive ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`
+          border: `1px solid ${ventasData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`
         }}>
-          {isPositive ? '+' : ''}{percentageChange.toFixed(1)}%
+          {ventasData.es_positivo ? '+' : ''}{ventasData.porcentaje_cambio.toFixed(1)}%
         </div>
       </div>
       
-      {/* Gráfico de tendencia simplificado */}
+      {/* Gráfico de tendencia semanal */}
       <div style={{ 
         width: '100%', 
         height: 40, 
@@ -94,14 +200,14 @@ const VentasSemanalesCard = ({
       }}>
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
-            d="M0 30 Q20 20 40 25 T80 15 T120 20 T160 10 T200 15"
+            d="M0 30 Q25 20 50 25 T100 15 T150 20 T200 10"
             stroke="#9370db"
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
-            d="M0 30 Q20 20 40 25 T80 15 T120 20 T160 10 T200 15 L200 40 L0 40 Z"
+            d="M0 30 Q25 20 50 25 T100 15 T150 20 T200 10 L200 40 L0 40 Z"
             fill="url(#gradient)"
             opacity="0.3"
           />

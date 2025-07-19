@@ -110,10 +110,8 @@ export default function Local() {
   });
 
   useEffect(() => {
-    // Simular carga de datos
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    // Cargar datos reales del local
+    setLoading(false);
     
     // Actualización automática cada 10 minutos
     const interval = setInterval(() => {

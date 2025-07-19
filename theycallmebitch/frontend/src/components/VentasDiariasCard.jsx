@@ -1,14 +1,95 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
+import { getPedidos } from '../services/api';
 
 const VentasDiariasCard = ({ 
   title = 'Ventas Diarias', 
-  value = 446429, 
+  value = 0, 
   subtitle = 'Hoy',
-  percentageChange = 15.2,
+  percentageChange = 0,
   isPositive = true 
 }) => {
   const theme = useTheme();
+  const [ventasData, setVentasData] = useState({
+    ventas_hoy: value,
+    porcentaje_cambio: percentageChange,
+    es_positivo: isPositive,
+    fecha: subtitle
+  });
+  const [loading, setLoading] = useState(false);
+  
+  const calcularVentasDiarias = async () => {
+    try {
+      setLoading(true);
+      const pedidos = await getPedidos();
+      
+      // Filtrar pedidos de hoy
+      const hoy = new Date();
+      const fechaHoy = hoy.toLocaleDateString('es-CL', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
+      
+      const pedidosHoy = pedidos.filter(pedido => {
+        return pedido.fecha === fechaHoy;
+      });
+      
+      const ventasHoy = pedidosHoy.reduce((total, pedido) => {
+        return total + (parseInt(pedido.precio) || 0);
+      }, 0);
+      
+      // Filtrar pedidos de ayer
+      const ayer = new Date(hoy);
+      ayer.setDate(hoy.getDate() - 1);
+      const fechaAyer = ayer.toLocaleDateString('es-CL', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
+      
+      const pedidosAyer = pedidos.filter(pedido => {
+        return pedido.fecha === fechaAyer;
+      });
+      
+      const ventasAyer = pedidosAyer.reduce((total, pedido) => {
+        return total + (parseInt(pedido.precio) || 0);
+      }, 0);
+      
+      // Calcular porcentaje de cambio
+      let porcentajeCambio = 0;
+      let esPositivo = true;
+      
+      if (ventasAyer > 0) {
+        porcentajeCambio = ((ventasHoy - ventasAyer) / ventasAyer) * 100;
+        esPositivo = ventasHoy >= ventasAyer;
+      } else if (ventasHoy > 0) {
+        porcentajeCambio = 100;
+        esPositivo = true;
+      }
+      
+      setVentasData({
+        ventas_hoy: ventasHoy,
+        porcentaje_cambio: porcentajeCambio,
+        es_positivo: esPositivo,
+        fecha: fechaHoy
+      });
+      
+    } catch (error) {
+      console.error('Error calculando ventas diarias:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    calcularVentasDiarias();
+    
+    // Actualizar cada 5 minutos
+    const interval = setInterval(calcularVentasDiarias, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   const formatValue = (val) => {
     if (val >= 1000000) {
@@ -39,7 +120,9 @@ const VentasDiariasCard = ({
         : 'rgba(147, 112, 219, 0.1)'}`,
       position: 'relative',
       overflow: 'hidden'
-    }}>
+    }}
+    onClick={calcularVentasDiarias}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div style={{ flex: 1 }}>
           <div style={{ 
@@ -51,6 +134,7 @@ const VentasDiariasCard = ({
             letterSpacing: '0.05em'
           }}>
             {title}
+            {loading && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#9370db' }}>🔄</span>}
           </div>
           <div style={{ 
             fontSize: '2.5rem', 
@@ -60,14 +144,14 @@ const VentasDiariasCard = ({
             fontFamily: '"Roboto", "Helvetica Neue", Arial, sans-serif',
             lineHeight: 1.1
           }}>
-            {formatValue(value)}
+            {formatValue(ventasData.ventas_hoy)}
           </div>
           <div style={{ 
             fontSize: '0.875rem', 
             color: theme.palette.text.secondary,
             fontWeight: 500
           }}>
-            {subtitle}
+            {ventasData.fecha}
           </div>
         </div>
         <div style={{
@@ -77,11 +161,11 @@ const VentasDiariasCard = ({
           borderRadius: 12,
           padding: '8px 12px',
           fontSize: '0.875rem',
-          color: isPositive ? '#059669' : '#dc2626',
+          color: ventasData.es_positivo ? '#059669' : '#dc2626',
           fontWeight: 600,
-          border: `1px solid ${isPositive ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`
+          border: `1px solid ${ventasData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`
         }}>
-          {isPositive ? '+' : ''}{percentageChange.toFixed(1)}%
+          {ventasData.es_positivo ? '+' : ''}{ventasData.porcentaje_cambio.toFixed(1)}%
         </div>
       </div>
       

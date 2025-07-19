@@ -17,6 +17,7 @@ import IvaCard from '../components/IvaCard';
 import CostosCard from '../components/CostosCard';
 import UtilidadesCard from '../components/UtilidadesCard';
 import DraggableCard from '../components/DraggableCard';
+import RentabilidadCard from '../components/RentabilidadCard';
 import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas } from '../services/api';
 import './Home.css';
 
@@ -494,13 +495,16 @@ export default function Home() {
             />
           </DraggableCard>
 
-          {/* Cards compactos */}
-          <DraggableCard
-            id="compactCards"
-            position={cardPositions.compactCards}
-            size={cardSizes.compactCards}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Cards compactos - FIJOS */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.compactCards.x,
+              top: cardPositions.compactCards.y,
+              width: cardSizes.compactCards.width,
+              height: cardSizes.compactCards.height,
+              zIndex: 10
+            }}
           >
             <Box sx={{ 
               display: 'grid',
@@ -547,7 +551,7 @@ export default function Home() {
                 isPositive={false}
               />
             </Box>
-          </DraggableCard>
+          </Box>
 
           {/* GRÁFICOS SIEMPRE AL FINAL - FUERA DEL FLUJO NORMAL */}
           <Box sx={{ 
@@ -569,11 +573,20 @@ export default function Home() {
             </Box>
             <Box sx={{ flex: 1 }}>
               <PedidosPorBloqueDonut 
-                pedidosManana={Math.round(data.pedidosMes * 0.58)}
-                pedidosTarde={Math.round(data.pedidosMes * 0.42)}
                 title="Pedidos por Horario"
               />
             </Box>
+          </Box>
+
+          {/* ANÁLISIS DE RENTABILIDAD - ABAJO DE LOS GRÁFICOS */}
+          <Box sx={{ 
+            position: 'absolute',
+            top: '1400px', // Posición ABAJO de los gráficos
+            left: 0,
+            right: 0,
+            zIndex: 1
+          }}>
+            <RentabilidadCard />
           </Box>
         </Box>
       </Box>

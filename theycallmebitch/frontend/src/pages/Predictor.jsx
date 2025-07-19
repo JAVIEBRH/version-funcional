@@ -23,7 +23,15 @@ import {
   Divider,
   Chip,
   IconButton,
-  Collapse
+  Collapse,
+  Tooltip,
+  Avatar,
+  Stack,
+  Badge,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  CircularProgress
 } from '@mui/material';
 import { 
   TrendingUp, 
@@ -36,17 +44,45 @@ import {
   CheckCircle,
   Warning,
   Info,
-  Delete
+  Delete,
+  Psychology,
+  Analytics,
+  Timeline,
+  Speed,
+  PrecisionManufacturing,
+  AutoGraph,
+  Insights,
+  TrendingDown,
+  ErrorOutline,
+  VerifiedUser,
+  Schedule,
+  Assessment,
+  DataUsage,
+  ShowChart,
+  BubbleChart,
+  ScatterPlot,
+  TimelineOutlined,
+  AnalyticsOutlined,
+  PsychologyAlt,
+  AutoAwesome,
+  Lightbulb,
+  TrendingFlat,
+  TrendingDownOutlined,
+  TrendingUpOutlined,
+  Home,
+  Business,
+  Visibility,
+  VisibilityOff,
+  Inventory
 } from '@mui/icons-material';
-import { getFactoresPrediccion } from '../services/api';
+import { getFactoresPrediccion, getPredictorInteligente, getTrackingMetricas, getTrackingReporte, registrarPedidosReales, getUltimasPredicciones } from '../services/api';
 import PrediccionCumplimientoCard from '../components/PrediccionCumplimientoCard';
 import './Predictor.css';
 
 export default function Predictor() {
   const [prediccion, setPrediccion] = useState({
     fecha: '',
-    tipoCliente: '',
-    historico: '30'
+    tipoCliente: 'residencial'
   });
   const [resultado, setResultado] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -60,204 +96,65 @@ export default function Predictor() {
   });
   const [historialPredicciones, setHistorialPredicciones] = useState([]);
   const [expandedHistorial, setExpandedHistorial] = useState({});
+  const [prediccionInteligente, setPrediccionInteligente] = useState(null);
+  const [modoPrediccion, setModoPrediccion] = useState('inteligente'); // 'inteligente' o 'clasico'
+  const [trackingMetricas, setTrackingMetricas] = useState(null);
+  const [trackingReporte, setTrackingReporte] = useState(null);
+  const [ultimasPredicciones, setUltimasPredicciones] = useState([]);
+  const [mostrarTracking, setMostrarTracking] = useState(false);
+  const [pedidosRealesInput, setPedidosRealesInput] = useState('');
+  const [fechaPedidosReales, setFechaPedidosReales] = useState('');
 
   // Cargar factores reales al montar el componente
   useEffect(() => {
     cargarFactoresReales();
     cargarDatosHistoricos();
     cargarHistorialLocal();
+    cargarTrackingData();
     
     // Actualización automática cada 10 minutos
     const interval = setInterval(() => {
       console.log('Actualización automática del predictor...');
       cargarFactoresReales();
       cargarDatosHistoricos();
+      cargarTrackingData();
     }, 10 * 60 * 1000); // 10 minutos
 
-    // Escuchar evento de actualización global
-    const handleGlobalRefresh = () => {
-      console.log('Actualización global detectada en Predictor...');
-      cargarFactoresReales();
-      cargarDatosHistoricos();
-    };
-
-    window.addEventListener('globalRefresh', handleGlobalRefresh);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('globalRefresh', handleGlobalRefresh);
-    };
+    return () => clearInterval(interval);
   }, []);
 
-  const cargarHistorialLocal = () => {
+  const cargarTrackingData = async () => {
     try {
-      const historialGuardado = localStorage.getItem('historialPredicciones');
-      if (historialGuardado) {
-        setHistorialPredicciones(JSON.parse(historialGuardado));
-      }
+      const [metricas, reporte, predicciones] = await Promise.all([
+        getTrackingMetricas(),
+        getTrackingReporte(),
+        getUltimasPredicciones(7)
+      ]);
+      
+      setTrackingMetricas(metricas);
+      setTrackingReporte(reporte);
+      setUltimasPredicciones(predicciones);
     } catch (error) {
-      console.error('Error cargando historial:', error);
+      console.error('Error cargando datos de tracking:', error);
     }
   };
 
-  const guardarHistorialLocal = (nuevoHistorial) => {
+  const registrarPedidosRealesHandler = async () => {
+    if (!fechaPedidosReales || !pedidosRealesInput) {
+      alert('Por favor completa todos los campos');
+      return;
+    }
+
     try {
-      localStorage.setItem('historialPredicciones', JSON.stringify(nuevoHistorial));
+      await registrarPedidosReales(fechaPedidosReales, parseInt(pedidosRealesInput), prediccion.tipoCliente);
+      setPedidosRealesInput('');
+      setFechaPedidosReales('');
+      await cargarTrackingData(); // Recargar datos
+      alert('Pedidos reales registrados exitosamente');
     } catch (error) {
-      console.error('Error guardando historial:', error);
+      console.error('Error registrando pedidos reales:', error);
+      alert('Error registrando pedidos reales');
     }
-  };
-
-  const generarAnalisisAutomatico = (resultado, prediccion) => {
-    // Corregir el formato de fecha para evitar problemas de zona horaria
-    const fecha = new Date(prediccion.fecha + 'T00:00:00');
-    const diaSemana = fecha.getDay();
-    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    
-    let analisis = {
-      titulo: `Predicción del ${fecha.toLocaleDateString('es-ES')} - ${prediccion.tipoCliente}`,
-      fecha: prediccion.fecha,
-      tipoCliente: prediccion.tipoCliente,
-      timestamp: new Date().toISOString(),
-      resumen: '',
-      detalles: [],
-      nivelConfianza: resultado.confianza,
-      totalPedidos: resultado.totalPedidos,
-      zonasActivas: Object.entries(resultado.prediccionesPorZona)
-        .filter(([_, datos]) => datos.pedidos > 0)
-        .map(([zona, _]) => zona),
-      zonasInactivas: Object.entries(resultado.prediccionesPorZona)
-        .filter(([_, datos]) => datos.pedidos === 0)
-        .map(([zona, _]) => zona)
-    };
-
-    // Generar resumen principal con fecha corregida
-    analisis.resumen = `Se esperan ${resultado.totalPedidos} pedidos para el ${diasSemana[diaSemana]} ${fecha.toLocaleDateString('es-ES')} con ${resultado.confianza}% de confianza.`;
-    
-    // Log para verificar la fecha procesada
-    console.log('=== ANÁLISIS AUTOMÁTICO ===');
-    console.log('Fecha ingresada:', prediccion.fecha);
-    console.log('Fecha procesada:', fecha.toLocaleDateString('es-ES'));
-    console.log('Día de la semana:', diasSemana[diaSemana], `(${diaSemana})`);
-    console.log('Resumen generado:', analisis.resumen);
-    console.log('=============================');
-
-    // Análisis detallado
-    const detalles = [];
-
-    // Análisis por día de la semana
-    if (diaSemana === 0 || diaSemana === 6) {
-      detalles.push({
-        tipo: 'info',
-        mensaje: `Día ${diasSemana[diaSemana]}: Demanda típicamente menor en fines de semana`,
-        icono: 'info'
-      });
-    } else if (diaSemana >= 1 && diaSemana <= 5) {
-      detalles.push({
-        tipo: 'success',
-        mensaje: `Día ${diasSemana[diaSemana]}: Alta actividad comercial esperada`,
-        icono: 'check'
-      });
-    }
-
-    // Análisis por tipo de cliente
-    if (prediccion.tipoCliente === 'recurrente') {
-      detalles.push({
-        tipo: 'success',
-        mensaje: 'Clientes recurrentes: Demanda estable y predecible',
-        icono: 'check'
-      });
-    } else if (prediccion.tipoCliente === 'nuevo') {
-      detalles.push({
-        tipo: 'warning',
-        mensaje: 'Clientes nuevos: Mayor variabilidad en la demanda',
-        icono: 'warning'
-      });
-    } else if (prediccion.tipoCliente === 'empresa') {
-      detalles.push({
-        tipo: 'info',
-        mensaje: 'Clientes empresariales: Pedidos de mayor volumen',
-        icono: 'info'
-      });
-    }
-
-    // Análisis por volumen total
-    if (resultado.totalPedidos > 50) {
-      detalles.push({
-        tipo: 'success',
-        mensaje: `Alto volumen (${resultado.totalPedidos} pedidos): Considerar refuerzo de personal`,
-        icono: 'check'
-      });
-    } else if (resultado.totalPedidos < 20) {
-      detalles.push({
-        tipo: 'warning',
-        mensaje: `Bajo volumen (${resultado.totalPedidos} pedidos): Evaluar optimización de rutas`,
-        icono: 'warning'
-      });
-    } else {
-      detalles.push({
-        tipo: 'info',
-        mensaje: `Volumen moderado (${resultado.totalPedidos} pedidos): Operación estándar`,
-        icono: 'info'
-      });
-    }
-
-    // Análisis por distribución de zonas
-    if (analisis.zonasActivas.length >= 4) {
-      detalles.push({
-        tipo: 'success',
-        mensaje: `Buena distribución: Actividad en ${analisis.zonasActivas.length} zonas`,
-        icono: 'check'
-      });
-    } else if (analisis.zonasActivas.length <= 2) {
-      detalles.push({
-        tipo: 'warning',
-        mensaje: `Concentración alta: Solo ${analisis.zonasActivas.length} zonas activas`,
-        icono: 'warning'
-      });
-    }
-
-    // Análisis de confianza
-    if (resultado.confianza >= 90) {
-      detalles.push({
-        tipo: 'success',
-        mensaje: `Alta confianza (${resultado.confianza}%): Predicción muy confiable`,
-        icono: 'check'
-      });
-    } else if (resultado.confianza >= 75) {
-      detalles.push({
-        tipo: 'info',
-        mensaje: `Confianza moderada (${resultado.confianza}%): Considerar factores adicionales`,
-        icono: 'info'
-      });
-    } else {
-      detalles.push({
-        tipo: 'warning',
-        mensaje: `Baja confianza (${resultado.confianza}%): Revisar datos históricos`,
-        icono: 'warning'
-      });
-    }
-
-    // Análisis de factores considerados
-    if (resultado.factores.length > 0) {
-      detalles.push({
-        tipo: 'info',
-        mensaje: `Factores clave: ${resultado.factores.join(', ')}`,
-        icono: 'info'
-      });
-    }
-
-    // Análisis de recomendaciones
-    if (resultado.recomendaciones.length > 0) {
-      detalles.push({
-        tipo: 'success',
-        mensaje: `Recomendaciones: ${resultado.recomendaciones.join(', ')}`,
-        icono: 'check'
-      });
-    }
-
-    analisis.detalles = detalles;
-    return analisis;
   };
 
   const cargarFactoresReales = async () => {
@@ -332,11 +229,9 @@ export default function Predictor() {
     setHistorialPredicciones(nuevoHistorial);
     guardarHistorialLocal(nuevoHistorial);
     
-    // Limpiar el estado de expansión para el elemento eliminado
     setExpandedHistorial(prev => {
       const nuevoExpanded = { ...prev };
       delete nuevoExpanded[index];
-      // Reindexar los elementos restantes
       const reindexed = {};
       Object.keys(nuevoExpanded).forEach(key => {
         const oldIndex = parseInt(key);
@@ -350,7 +245,171 @@ export default function Predictor() {
     });
   };
 
-  // Lógica de forecast para todas las zonas
+  const generarPrediccionInteligente = async () => {
+    if (!prediccion.fecha || !prediccion.tipoCliente) {
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      const resultado = await getPredictorInteligente(prediccion.fecha, prediccion.tipoCliente);
+      setPrediccionInteligente(resultado);
+      
+      // Generar análisis automático
+      const analisis = generarAnalisisInteligente(resultado, prediccion);
+      
+      // Agregar al historial
+      const nuevoHistorial = [analisis, ...historialPredicciones.slice(0, 9)];
+      setHistorialPredicciones(nuevoHistorial);
+      guardarHistorialLocal(nuevoHistorial);
+      
+      // Actualizar cumplimiento con datos reales (se actualizará cuando se registren pedidos reales)
+      setCumplimiento({
+        prediccionEsperada: resultado.prediccion,
+        pedidosReales: 0, // Se actualizará con datos reales cuando estén disponibles
+        fecha: prediccion.fecha,
+        tipoCliente: prediccion.tipoCliente
+      });
+      
+    } catch (error) {
+      console.error('Error generando predicción inteligente:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generarAnalisisInteligente = (resultado, prediccion) => {
+    const fecha = new Date(prediccion.fecha + 'T00:00:00');
+    const diaSemana = fecha.getDay();
+    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    
+    let analisis = {
+      titulo: `Predicción Inteligente - ${fecha.toLocaleDateString('es-ES')} - ${prediccion.tipoCliente}`,
+      fecha: prediccion.fecha,
+      tipoCliente: prediccion.tipoCliente,
+      timestamp: new Date().toISOString(),
+      resumen: '',
+      detalles: [],
+      nivelConfianza: resultado.nivel_confianza,
+      prediccion: resultado.prediccion,
+      rangoConfianza: resultado.rango_confianza,
+      esAnomalia: resultado.es_anomalia,
+      anomaliasDetectadas: resultado.anomalias_detectadas
+    };
+
+    // Generar resumen principal
+    analisis.resumen = `Se esperan ${resultado.prediccion} pedidos (rango: ${resultado.rango_confianza[0]}-${resultado.rango_confianza[1]}) para el ${diasSemana[diaSemana]} ${fecha.toLocaleDateString('es-ES')} con ${resultado.nivel_confianza}% de confianza.`;
+
+    // Análisis detallado
+    const detalles = [];
+
+    // Análisis por nivel de confianza
+    if (resultado.nivel_confianza >= 80) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Alta confianza (${resultado.nivel_confianza}%): Predicción muy confiable`,
+        icono: 'check'
+      });
+    } else if (resultado.nivel_confianza >= 70) {
+      detalles.push({
+        tipo: 'info',
+        mensaje: `Confianza moderada (${resultado.nivel_confianza}%): Predicción confiable`,
+        icono: 'info'
+      });
+    } else {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: `Baja confianza (${resultado.nivel_confianza}%): Considerar factores adicionales`,
+        icono: 'warning'
+      });
+    }
+
+    // Análisis por rango de confianza
+    const amplitudRango = resultado.rango_confianza[1] - resultado.rango_confianza[0];
+    if (amplitudRango <= 2) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Rango estrecho (${amplitudRango} pedidos): Alta precisión esperada`,
+        icono: 'check'
+      });
+    } else if (amplitudRango <= 4) {
+      detalles.push({
+        tipo: 'info',
+        mensaje: `Rango moderado (${amplitudRango} pedidos): Precisión aceptable`,
+        icono: 'info'
+      });
+    } else {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: `Rango amplio (${amplitudRango} pedidos): Mayor incertidumbre`,
+        icono: 'warning'
+      });
+    }
+
+    // Análisis por tipo de cliente
+    if (prediccion.tipoCliente === 'recurrente') {
+      detalles.push({
+        tipo: 'success',
+        mensaje: 'Clientes recurrentes: Patrón estable y predecible',
+        icono: 'check'
+      });
+    } else if (prediccion.tipoCliente === 'nuevo') {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: 'Clientes nuevos: Mayor variabilidad en la demanda',
+        icono: 'warning'
+      });
+    } else if (prediccion.tipoCliente === 'empresa') {
+      detalles.push({
+        tipo: 'info',
+        mensaje: 'Clientes empresariales: Pedidos de mayor volumen',
+        icono: 'info'
+      });
+    }
+
+    // Análisis de anomalías
+    if (resultado.es_anomalia) {
+      detalles.push({
+        tipo: 'error',
+        mensaje: '⚠️ Día detectado como anómalo: Considerar factores especiales',
+        icono: 'error'
+      });
+    }
+
+    if (resultado.anomalias_detectadas > 0) {
+      detalles.push({
+        tipo: 'info',
+        mensaje: `${resultado.anomalias_detectadas} anomalías detectadas en datos históricos`,
+        icono: 'info'
+      });
+    }
+
+    analisis.detalles = detalles;
+    return analisis;
+  };
+
+  const generarPrediccion = async () => {
+    if (modoPrediccion === 'inteligente') {
+      await generarPrediccionInteligente();
+    } else {
+      // Lógica del predictor clásico (mantener para compatibilidad)
+      setLoading(true);
+      setTimeout(() => {
+        const resultadoCalculado = calcularForecastCompleto();
+        if (resultadoCalculado) {
+          setResultado(resultadoCalculado);
+          const analisis = generarAnalisisAutomatico(resultadoCalculado, prediccion);
+          const nuevoHistorial = [analisis, ...historialPredicciones.slice(0, 9)];
+          setHistorialPredicciones(nuevoHistorial);
+          guardarHistorialLocal(nuevoHistorial);
+        }
+        setLoading(false);
+      }, 2000);
+    }
+  };
+
+  // Mantener funciones del predictor clásico para compatibilidad
   const calcularForecastCompleto = () => {
     if (!prediccion.fecha || !prediccion.tipoCliente || !factoresReales) {
       return null;
@@ -480,45 +539,156 @@ export default function Predictor() {
     };
   };
 
-  const generarPrediccion = async () => {
-    setLoading(true);
+  const generarAnalisisAutomatico = (resultado, prediccion) => {
+    // Corregir el formato de fecha para evitar problemas de zona horaria
+    const fecha = new Date(prediccion.fecha + 'T00:00:00');
+    const diaSemana = fecha.getDay();
+    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     
-    // Simular tiempo de procesamiento
-    setTimeout(() => {
-      const resultadoCalculado = calcularForecastCompleto();
-      
-      if (resultadoCalculado) {
-        setResultado(resultadoCalculado);
-        
-        // Generar análisis automático
-        const analisis = generarAnalisisAutomatico(resultadoCalculado, prediccion);
-        
-        // Agregar al historial
-        const nuevoHistorial = [analisis, ...historialPredicciones.slice(0, 9)]; // Mantener solo los últimos 10
-        setHistorialPredicciones(nuevoHistorial);
-        guardarHistorialLocal(nuevoHistorial);
-        
-        // Actualizar cumplimiento con datos simulados para el total
-        const pedidosRealesSimulados = Math.round(resultadoCalculado.totalPedidos * (0.8 + Math.random() * 0.4)); // ±20% variabilidad
-        
-        setCumplimiento({
-          prediccionEsperada: resultadoCalculado.totalPedidos,
-          pedidosReales: pedidosRealesSimulados,
-          fecha: prediccion.fecha,
-          tipoCliente: prediccion.tipoCliente
+    let analisis = {
+      titulo: `Predicción del ${fecha.toLocaleDateString('es-ES')} - ${prediccion.tipoCliente}`,
+      fecha: prediccion.fecha,
+      tipoCliente: prediccion.tipoCliente,
+      timestamp: new Date().toISOString(),
+      resumen: '',
+      detalles: [],
+      nivelConfianza: resultado.confianza,
+      totalPedidos: resultado.totalPedidos,
+      zonasActivas: Object.entries(resultado.prediccionesPorZona)
+        .filter(([_, datos]) => datos.pedidos > 0)
+        .map(([zona, _]) => zona),
+      zonasInactivas: Object.entries(resultado.prediccionesPorZona)
+        .filter(([_, datos]) => datos.pedidos === 0)
+        .map(([zona, _]) => zona)
+    };
+
+    // Generar resumen principal con fecha corregida
+    analisis.resumen = `Se esperan ${resultado.totalPedidos} pedidos para el ${diasSemana[diaSemana]} ${fecha.toLocaleDateString('es-ES')} con ${resultado.confianza}% de confianza.`;
+    
+    // Log para verificar la fecha procesada
+    console.log('=== ANÁLISIS AUTOMÁTICO ===');
+    console.log('Fecha ingresada:', prediccion.fecha);
+    console.log('Fecha procesada:', fecha.toLocaleDateString('es-ES'));
+    console.log('Día de la semana:', diasSemana[diaSemana], `(${diaSemana})`);
+    console.log('Resumen generado:', analisis.resumen);
+    console.log('=============================');
+
+    // Análisis detallado
+    const detalles = [];
+
+    // Análisis por día de la semana
+    if (diaSemana === 0 || diaSemana === 6) {
+      detalles.push({
+        tipo: 'info',
+        mensaje: `Día ${diasSemana[diaSemana]}: Demanda típicamente menor en fines de semana`,
+        icono: 'info'
+      });
+    } else if (diaSemana >= 1 && diaSemana <= 5) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Día ${diasSemana[diaSemana]}: Alta actividad comercial esperada`,
+        icono: 'check'
+      });
+    }
+
+    // Análisis por tipo de cliente
+    if (prediccion.tipoCliente === 'recurrente') {
+      detalles.push({
+        tipo: 'success',
+        mensaje: 'Clientes recurrentes: Demanda estable y predecible',
+        icono: 'check'
+      });
+    } else if (prediccion.tipoCliente === 'nuevo') {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: 'Clientes nuevos: Mayor variabilidad en la demanda',
+        icono: 'warning'
+      });
+    } else if (prediccion.tipoCliente === 'empresa') {
+      detalles.push({
+        tipo: 'info',
+        mensaje: 'Clientes empresariales: Pedidos de mayor volumen',
+        icono: 'info'
+      });
+    }
+
+    // Análisis por volumen total
+    if (resultado.totalPedidos > 50) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Alto volumen (${resultado.totalPedidos} pedidos): Considerar refuerzo de personal`,
+        icono: 'check'
+      });
+    } else if (resultado.totalPedidos < 20) {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: `Bajo volumen (${resultado.totalPedidos} pedidos): Evaluar optimización de rutas`,
+        icono: 'warning'
         });
       } else {
-        setResultado({
-          prediccionesPorZona: {},
-          totalPedidos: 0,
-          confianza: 0,
-          factores: ['Datos insuficientes'],
-          recomendaciones: ['Completar todos los parámetros']
-        });
-      }
-      
-      setLoading(false);
-    }, 2000);
+      detalles.push({
+        tipo: 'info',
+        mensaje: `Volumen moderado (${resultado.totalPedidos} pedidos): Operación estándar`,
+        icono: 'info'
+      });
+    }
+
+    // Análisis por distribución de zonas
+    if (analisis.zonasActivas.length >= 4) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Buena distribución: Actividad en ${analisis.zonasActivas.length} zonas`,
+        icono: 'check'
+      });
+    } else if (analisis.zonasActivas.length <= 2) {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: `Concentración alta: Solo ${analisis.zonasActivas.length} zonas activas`,
+        icono: 'warning'
+      });
+    }
+
+    // Análisis de confianza
+    if (resultado.confianza >= 90) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Alta confianza (${resultado.confianza}%): Predicción muy confiable`,
+        icono: 'check'
+      });
+    } else if (resultado.confianza >= 75) {
+      detalles.push({
+        tipo: 'info',
+        mensaje: `Confianza moderada (${resultado.confianza}%): Considerar factores adicionales`,
+        icono: 'info'
+      });
+    } else {
+      detalles.push({
+        tipo: 'warning',
+        mensaje: `Baja confianza (${resultado.confianza}%): Revisar datos históricos`,
+        icono: 'warning'
+      });
+    }
+
+    // Análisis de factores considerados
+    if (resultado.factores.length > 0) {
+      detalles.push({
+        tipo: 'info',
+        mensaje: `Factores clave: ${resultado.factores.join(', ')}`,
+        icono: 'info'
+      });
+    }
+
+    // Análisis de recomendaciones
+    if (resultado.recomendaciones.length > 0) {
+      detalles.push({
+        tipo: 'success',
+        mensaje: `Recomendaciones: ${resultado.recomendaciones.join(', ')}`,
+        icono: 'check'
+      });
+    }
+
+    analisis.detalles = detalles;
+    return analisis;
   };
 
   const getIconoAnalisis = (tipo) => {
@@ -526,7 +696,50 @@ export default function Predictor() {
       case 'success': return <CheckCircle sx={{ color: '#10b981' }} />;
       case 'warning': return <Warning sx={{ color: '#f59e0b' }} />;
       case 'info': return <Info sx={{ color: '#3b82f6' }} />;
+      case 'error': return <ErrorOutline sx={{ color: '#ef4444' }} />;
       default: return <Info sx={{ color: '#6b7280' }} />;
+    }
+  };
+
+  const guardarHistorialLocal = (historial) => {
+    try {
+      localStorage.setItem('historialPredicciones', JSON.stringify(historial));
+    } catch (error) {
+      console.error('Error guardando historial:', error);
+    }
+  };
+
+  const cargarHistorialLocal = () => {
+    try {
+      const historial = localStorage.getItem('historialPredicciones');
+      if (historial) {
+        setHistorialPredicciones(JSON.parse(historial));
+      }
+    } catch (error) {
+      console.error('Error cargando historial:', error);
+    }
+  };
+
+  const getColorConfianza = (nivel) => {
+    if (nivel >= 80) return '#10b981';
+    if (nivel >= 70) return '#3b82f6';
+    if (nivel >= 60) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  const getIconoModo = () => {
+    switch (modoPrediccion) {
+      case 'inteligente': return <AutoAwesome />;
+      case 'clasico': return <Analytics />;
+      default: return <AutoAwesome />;
+    }
+  };
+
+  const getTituloModo = () => {
+    switch (modoPrediccion) {
+      case 'inteligente': return 'Predictor Inteligente';
+      case 'clasico': return 'Predictor Clásico';
+      default: return 'Predictor';
     }
   };
 
@@ -535,49 +748,122 @@ export default function Predictor() {
       p: 3,
       minHeight: '100vh',
       overflow: 'auto',
-      height: '100vh'
+      height: '100vh',
+      bgcolor: '#f8fafc'
     }}>
-      {/* Header */}
+      {/* Header Moderno */}
       <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Avatar sx={{ bgcolor: '#3b82f6', width: 56, height: 56 }}>
+            <AutoAwesome sx={{ fontSize: 28 }} />
+          </Avatar>
+          <Box>
         <Typography variant="h4" component="h1" sx={{ 
           color: '#1e293b', 
           fontWeight: 700, 
-          mb: 1,
           display: 'flex',
           alignItems: 'center',
-          gap: 2
-        }}>
-          <TrendingUp sx={{ fontSize: 32, color: '#3b82f6' }} />
-          Predictor de Pedidos
+              gap: 1
+            }}>
+              Predictor Inteligente de Pedidos
+              <Chip 
+                label="AI Powered" 
+                size="small" 
+                sx={{ 
+                  bgcolor: '#10b981', 
+                  color: 'white', 
+                  fontWeight: 600,
+                  fontSize: '0.75rem'
+                }} 
+              />
         </Typography>
         <Typography variant="body1" sx={{ 
-          color: 'text.primary',
-          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}>
-          Analiza patrones históricos y genera predicciones inteligentes para optimizar la logística
+              color: '#64748b',
+              mt: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              <PsychologyAlt sx={{ fontSize: 16 }} />
+              Análisis predictivo avanzado con calibración dinámica e intervalos de confianza
         </Typography>
+          </Box>
+        </Box>
+
+        {/* Selector de Modo Simplificado */}
+        <Card sx={{ mb: 3, bgcolor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant={modoPrediccion === 'inteligente' ? 'contained' : 'outlined'}
+                startIcon={<AutoAwesome />}
+                onClick={() => setModoPrediccion('inteligente')}
+                sx={{
+                  bgcolor: modoPrediccion === 'inteligente' ? '#8b5cf6' : 'transparent',
+                  color: modoPrediccion === 'inteligente' ? 'white' : '#64748b',
+                  '&:hover': {
+                    bgcolor: modoPrediccion === 'inteligente' ? '#7c3aed' : '#f1f5f9'
+                  }
+                }}
+              >
+                Predictor Inteligente
+              </Button>
+              <Button
+                variant={modoPrediccion === 'clasico' ? 'contained' : 'outlined'}
+                startIcon={<Analytics />}
+                onClick={() => setModoPrediccion('clasico')}
+                sx={{
+                  bgcolor: modoPrediccion === 'clasico' ? '#3b82f6' : 'transparent',
+                  color: modoPrediccion === 'clasico' ? 'white' : '#64748b',
+                  '&:hover': {
+                    bgcolor: modoPrediccion === 'clasico' ? '#2563eb' : '#f1f5f9'
+                  }
+                }}
+              >
+                Predictor Clásico
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {modoPrediccion === 'inteligente' && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AutoAwesome />
+              Predictor Inteligente: Incluye análisis VIP, variables exógenas, calibración dinámica y efectividad estimada
+            </Box>
+          </Alert>
+        )}
+
         {factoresReales && (
-          <Alert severity="info" sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <DataUsage />
             Análisis basado en {factoresReales.total_pedidos_analizados} pedidos reales de Aguas Ancud
             ({factoresReales.periodo_analisis.fecha_inicio} a {factoresReales.periodo_analisis.fecha_fin})
+            </Box>
           </Alert>
         )}
       </Box>
 
       <Grid container spacing={3}>
-        {/* Formulario de predicción */}
+        {/* Formulario de Predicción Moderno */}
         <Grid item xs={12} md={4}>
-          <Card sx={{ height: 'fit-content' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 3, color: '#1e293b', fontWeight: 600 }}>
+          <Card sx={{ 
+            height: 'fit-content', 
+            bgcolor: '#fff',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+            border: '1px solid #e2e8f0'
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                {getIconoModo()}
+                <Typography variant="h6" sx={{ color: '#1e293b', fontWeight: 600 }}>
                 Parámetros de Predicción
               </Typography>
+              </Box>
               
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
+              <Stack spacing={3}>
                   <TextField
                     fullWidth
                     label="Fecha objetivo"
@@ -586,10 +872,16 @@ export default function Predictor() {
                     value={prediccion.fecha}
                     onChange={handleInputChange}
                     InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '& fieldset': { borderColor: '#e2e8f0' },
+                      '&:hover fieldset': { borderColor: '#cbd5e1' },
+                      '&.Mui-focused fieldset': { borderColor: '#3b82f6' }
+                    }
+                  }}
+                />
                 
-                <Grid item xs={12}>
                   <FormControl fullWidth>
                     <InputLabel>Tipo de cliente</InputLabel>
                     <Select
@@ -597,239 +889,434 @@ export default function Predictor() {
                       value={prediccion.tipoCliente}
                       onChange={handleInputChange}
                       label="Tipo de cliente"
-                    >
-                      <MenuItem value="recurrente">Cliente recurrente</MenuItem>
-                      <MenuItem value="nuevo">Cliente nuevo</MenuItem>
-                      <MenuItem value="empresa">Empresa</MenuItem>
-                      <MenuItem value="residencial">Residencial</MenuItem>
+                    sx={{
+                      borderRadius: 2,
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#3b82f6' }
+                    }}
+                  >
+                    <MenuItem value="recurrente">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CheckCircle sx={{ fontSize: 16, color: '#10b981' }} />
+                        Cliente recurrente
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="residencial">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Home sx={{ fontSize: 16, color: '#3b82f6' }} />
+                        Residencial
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="nuevo">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TrendingUp sx={{ fontSize: 16, color: '#f59e0b' }} />
+                        Cliente nuevo
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="empresa">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Business sx={{ fontSize: 16, color: '#8b5cf6' }} />
+                        Empresa
+                      </Box>
+                    </MenuItem>
+                    <MenuItem value="vip">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <VerifiedUser sx={{ fontSize: 16, color: '#f59e0b' }} />
+                        Cliente VIP
+                      </Box>
+                    </MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
                 
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Período histórico (días)"
-                    type="number"
-                    name="historico"
-                    value={prediccion.historico}
-                    onChange={handleInputChange}
-                    placeholder="30"
-                  />
-                </Grid>
-                
-                <Grid item xs={12}>
                   <Button
                     fullWidth
                     variant="contained"
                     onClick={generarPrediccion}
-                    disabled={loading || !prediccion.fecha || !prediccion.tipoCliente || !factoresReales}
+                  disabled={loading || !prediccion.fecha || !prediccion.tipoCliente}
+                  startIcon={loading ? <CircularProgress size={20} /> : <AutoAwesome />}
                     sx={{ 
-                      mt: 2,
-                      bgcolor: '#3b82f6',
-                      '&:hover': { bgcolor: '#2563eb' }
-                    }}
-                  >
-                    {loading ? 'Generando predicción...' : 'Generar Predicción Completa'}
+                    py: 1.5,
+                    bgcolor: modoPrediccion === 'inteligente' ? '#8b5cf6' : '#3b82f6',
+                    '&:hover': { 
+                      bgcolor: modoPrediccion === 'inteligente' ? '#7c3aed' : '#2563eb' 
+                    },
+                    borderRadius: 2,
+                    fontWeight: 600
+                  }}
+                >
+                  {loading ? 'Generando predicción...' : `Generar ${getTituloModo()}`}
                   </Button>
-                </Grid>
-              </Grid>
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Resultados de predicción */}
+        {/* Resultados de Predicción Inteligente */}
         <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 3, color: '#1e293b', fontWeight: 600 }}>
-                Resultados de Predicción Completa
+          <Card sx={{ 
+            bgcolor: '#fff',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+            border: '1px solid #e2e8f0'
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                <Insights sx={{ color: '#3b82f6' }} />
+                <Typography variant="h6" sx={{ color: '#1e293b', fontWeight: 600 }}>
+                  Resultados de Predicción Inteligente
               </Typography>
+              </Box>
               
               {loading && (
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="body2" sx={{ 
-                    mb: 1,
-                    color: 'text.primary',
-                    fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    textRendering: 'optimizeLegibility'
-                  }}>
-                    Analizando patrones históricos para todas las zonas...
+                  <Typography variant="body2" sx={{ mb: 1, color: '#64748b' }}>
+                    Analizando patrones históricos con IA...
                   </Typography>
-                  <LinearProgress />
+                  <LinearProgress sx={{ borderRadius: 1 }} />
                 </Box>
               )}
               
-              {resultado && resultado.totalPedidos > 0 ? (
+              {prediccionInteligente ? (
                 <Box>
-                  <Alert severity="info" sx={{ mb: 3 }}>
-                    Predicción generada con {resultado.confianza}% de confianza
-                  </Alert>
-                  
-                  {/* Resumen Total */}
-                  <Box sx={{ mb: 3, p: 2, bgcolor: '#f0f9ff', borderRadius: 2, border: '1px solid #0ea5e9' }}>
-                    <Typography variant="h5" sx={{ color: '#0ea5e9', fontWeight: 700, mb: 1 }}>
-                      Total Esperado: {resultado.totalPedidos} pedidos
+                  {/* Resumen Principal */}
+                  <Card sx={{ 
+                    mb: 3, 
+                    bgcolor: '#f0f9ff', 
+                    border: '1px solid #0ea5e9',
+                    borderRadius: 2
+                  }}>
+                    <CardContent sx={{ p: 3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <Avatar sx={{ bgcolor: '#0ea5e9', width: 48, height: 48 }}>
+                          <TrendingUp sx={{ fontSize: 24 }} />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="h5" sx={{ color: '#0ea5e9', fontWeight: 700 }}>
+                            {prediccionInteligente.prediccion} pedidos
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Distribución completa para {prediccion.fecha} - {prediccion.tipoCliente}
+                            Rango de confianza: {prediccionInteligente.rango_confianza[0]} - {prediccionInteligente.rango_confianza[1]}
                     </Typography>
+                        </Box>
+                        <Box sx={{ ml: 'auto' }}>
+                          <Chip 
+                            label={`${prediccionInteligente.nivel_confianza}% confianza`}
+                            sx={{ 
+                              bgcolor: getColorConfianza(prediccionInteligente.nivel_confianza),
+                              color: 'white',
+                              fontWeight: 600
+                            }}
+                          />
+                        </Box>
                   </Box>
 
-                  {/* Tabla Comparativa */}
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                    Predicción por Zona:
+                      <Typography variant="body1" sx={{ color: '#1e293b', fontWeight: 500 }}>
+                        {prediccion.fecha} - {prediccion.tipoCliente}
                   </Typography>
-                  <TableContainer component={Paper} sx={{ mb: 3 }}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Zona</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>Pedidos</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>% Total</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>Factor Zona</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 600 }}>Prioridad</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {Object.entries(resultado.prediccionesPorZona).map(([zona, datos]) => {
-                          const prioridad = datos.porcentaje > 25 ? 'Alta' : 
-                                          datos.porcentaje > 15 ? 'Media' : 'Baja';
-                          const colorPrioridad = prioridad === 'Alta' ? '#10b981' : 
-                                               prioridad === 'Media' ? '#f59e0b' : '#ef4444';
-                          
-                          return (
-                            <TableRow key={zona}>
-                              <TableCell sx={{ textTransform: 'capitalize', fontWeight: 500 }}>
-                                {zona}
-                              </TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {datos.pedidos}
-                              </TableCell>
-                              <TableCell align="right">
-                                {datos.porcentaje}%
-                              </TableCell>
-                              <TableCell align="right">
-                                {datos.factorZona}
-                              </TableCell>
-                              <TableCell align="center">
-                                <Box sx={{ 
-                                  color: colorPrioridad, 
-                                  fontWeight: 600,
-                                  fontSize: '0.875rem'
-                                }}>
-                                  {prioridad}
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                    </CardContent>
+                  </Card>
 
-                  {/* Gráfico de Distribución */}
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                    Distribución por Zona:
+                  {/* Métricas Detalladas */}
+                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                    <Grid item xs={12} md={3}>
+                      <Card sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="h6" sx={{ color: '#1e293b', fontWeight: 600 }}>
+                            {prediccionInteligente.prediccion}
                   </Typography>
-                  <Box sx={{ mb: 3, p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
-                    <Grid container spacing={2}>
-                      {Object.entries(resultado.prediccionesPorZona).map(([zona, datos]) => (
-                        <Grid item xs={12} sm={6} md={4} key={zona}>
-                          <Box sx={{ 
-                            p: 2, 
-                            bgcolor: '#fff', 
-                            borderRadius: 1, 
-                            border: '1px solid #e2e8f0',
-                            textAlign: 'center'
+                          <Typography variant="body2" color="text.secondary">
+                            Predicción Base
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                      <Card sx={{ bgcolor: '#f0fdf4', border: '1px solid #22c55e' }}>
+                        <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="h6" sx={{ color: '#166534', fontWeight: 600 }}>
+                            {prediccionInteligente.rango_confianza[0]}-{prediccionInteligente.rango_confianza[1]}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#166534' }}>
+                            Rango Confianza
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                      <Card sx={{ 
+                        bgcolor: prediccionInteligente.es_anomalia ? '#fef2f2' : '#f0f9ff',
+                        border: `1px solid ${prediccionInteligente.es_anomalia ? '#ef4444' : '#0ea5e9'}`
+                      }}>
+                        <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                          <Typography variant="h6" sx={{ 
+                            color: prediccionInteligente.es_anomalia ? '#dc2626' : '#0ea5e9', 
+                            fontWeight: 600 
                           }}>
-                            <Typography variant="h6" sx={{ color: '#3b82f6', fontWeight: 700 }}>
-                              {datos.pedidos}
+                            {prediccionInteligente.es_anomalia ? 'Sí' : 'No'}
                             </Typography>
                             <Typography variant="body2" sx={{ 
-                              textTransform: 'capitalize', 
-                              color: 'text.primary',
-                              fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                              WebkitFontSmoothing: 'antialiased',
-                              MozOsxFontSmoothing: 'grayscale',
-                              textRendering: 'optimizeLegibility'
-                            }}>
-                              {zona}
+                            color: prediccionInteligente.es_anomalia ? '#dc2626' : '#0ea5e9'
+                          }}>
+                            Día Anómalo
                             </Typography>
-                            <Box sx={{ 
-                              width: '100%', 
-                              height: 8, 
-                              bgcolor: '#e2e8f0', 
-                              borderRadius: 4, 
-                              mt: 1,
-                              overflow: 'hidden'
-                            }}>
-                              <Box sx={{ 
-                                width: `${datos.porcentaje}%`, 
-                                height: '100%', 
-                                bgcolor: '#3b82f6',
-                                borderRadius: 4
-                              }} />
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    {prediccionInteligente.efectividad_estimada && (
+                      <Grid item xs={12} md={3}>
+                        <Card sx={{ bgcolor: '#fef3c7', border: '1px solid #f59e0b' }}>
+                          <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                            <Typography variant="h6" sx={{ color: '#92400e', fontWeight: 600 }}>
+                              {prediccionInteligente.efectividad_estimada}%
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#92400e' }}>
+                              Efectividad
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    )}
+                  </Grid>
+
+                  {/* Predicción de Bidones (Análisis Híbrido) */}
+                  {prediccionInteligente.prediccion_bidones && (
+                    <Card sx={{ mb: 3, bgcolor: '#f0fdf4', border: '1px solid #22c55e' }}>
+                      <CardContent sx={{ p: 3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                          <Inventory sx={{ color: '#22c55e' }} />
+                          <Typography variant="h6" sx={{ color: '#166534', fontWeight: 600 }}>
+                            Predicción de Bidones
+                          </Typography>
+                        </Box>
+                        
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#166534', fontWeight: 700 }}>
+                                {prediccionInteligente.prediccion_bidones.valor_medio}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#166534' }}>
+                                Bidones Estimados
+                              </Typography>
                             </Box>
-                            <Typography variant="caption" color="text.secondary">
-                              {datos.porcentaje}% del total
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#10b981', fontWeight: 700 }}>
+                                {prediccionInteligente.prediccion_bidones.rango_estimado[0]}-{prediccionInteligente.prediccion_bidones.rango_estimado[1]}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#10b981' }}>
+                                Rango Estimado
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#3b82f6', fontWeight: 700 }}>
+                                {prediccionInteligente.prediccion_bidones.promedio_por_pedido}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#3b82f6' }}>
+                                Promedio/Pedido
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#f59e0b', fontWeight: 700 }}>
+                                {prediccionInteligente.prediccion_bidones.factor_conversion}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#f59e0b' }}>
+                                Factor Conversión
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        </Grid>
+
+                        <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1, border: '1px solid #22c55e' }}>
+                          <Typography variant="body2" sx={{ color: '#166534', fontWeight: 500 }}>
+                            📊 <strong>Análisis Híbrido:</strong> Basado en {prediccionInteligente.prediccion} pedidos esperados × {prediccionInteligente.prediccion_bidones.promedio_por_pedido} bidones promedio por pedido
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Análisis VIP */}
+                  {prediccionInteligente.analisis_vip && prediccionInteligente.analisis_vip.total_vip > 0 && (
+                    <Card sx={{ mb: 3, bgcolor: '#fef3c7', border: '1px solid #f59e0b' }}>
+                      <CardContent sx={{ p: 3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                          <VerifiedUser sx={{ color: '#f59e0b' }} />
+                          <Typography variant="h6" sx={{ color: '#92400e', fontWeight: 600 }}>
+                            Análisis de Clientes VIP
+                          </Typography>
+                            </Box>
+                        
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#92400e', fontWeight: 700 }}>
+                                {prediccionInteligente.analisis_vip.total_vip}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#92400e' }}>
+                                Total VIP
                             </Typography>
                           </Box>
                         </Grid>
-                      ))}
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#10b981', fontWeight: 700 }}>
+                                {prediccionInteligente.analisis_vip.probabilidad_alta}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#10b981' }}>
+                                Alta Probabilidad
+                              </Typography>
+                            </Box>
                     </Grid>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#3b82f6', fontWeight: 700 }}>
+                                {prediccionInteligente.analisis_vip.probabilidad_media}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#3b82f6' }}>
+                                Media Probabilidad
+                              </Typography>
                   </Box>
-                  
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                    Factores considerados:
+                          </Grid>
+                          <Grid item xs={12} md={3}>
+                            <Box sx={{ textAlign: 'center' }}>
+                              <Typography variant="h5" sx={{ color: '#64748b', fontWeight: 700 }}>
+                                {prediccionInteligente.analisis_vip.probabilidad_baja}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                Baja Probabilidad
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        </Grid>
+
+                        {prediccionInteligente.analisis_vip.clientes_destacados.length > 0 && (
+                          <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#92400e' }}>
+                              Clientes VIP Destacados:
                   </Typography>
-                  <Box sx={{ mb: 3 }}>
-                    {resultado.factores.map((factor, index) => (
-                      <Typography key={index} variant="body2" sx={{ 
-                        mb: 1, 
-                        color: 'text.primary',
-                        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                        WebkitFontSmoothing: 'antialiased',
-                        MozOsxFontSmoothing: 'grayscale',
-                        textRendering: 'optimizeLegibility'
-                      }}>
-                        • {factor}
+                            <Stack spacing={1}>
+                              {prediccionInteligente.analisis_vip.clientes_destacados.map((cliente, idx) => (
+                                <Box key={idx} sx={{ 
+                                  p: 1, 
+                                  bgcolor: 'white', 
+                                  borderRadius: 1, 
+                                  border: '1px solid #fbbf24' 
+                                }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {cliente.usuario} - {Math.round(cliente.probabilidad_pedido * 100)}% probabilidad
                       </Typography>
+                                  <Typography variant="caption" sx={{ color: '#64748b' }}>
+                                    {cliente.direccion}
+                                  </Typography>
+                                </Box>
                     ))}
+                            </Stack>
                   </Box>
-                  
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                    Recomendaciones:
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Recomendaciones */}
+                  {prediccionInteligente.recomendaciones && prediccionInteligente.recomendaciones.length > 0 && (
+                    <Card sx={{ mb: 3, bgcolor: '#f0f9ff', border: '1px solid #0ea5e9' }}>
+                      <CardContent sx={{ p: 3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                          <Lightbulb sx={{ color: '#0ea5e9' }} />
+                          <Typography variant="h6" sx={{ color: '#0ea5e9', fontWeight: 600 }}>
+                            Recomendaciones
                   </Typography>
-                  <Box>
-                    {resultado.recomendaciones.map((rec, index) => (
-                      <Typography key={index} variant="body2" sx={{ mb: 1, color: '#059669' }}>
-                        • {rec}
+                        </Box>
+                        
+                        <Stack spacing={1}>
+                          {prediccionInteligente.recomendaciones.map((rec, idx) => (
+                            <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <CheckCircle sx={{ fontSize: 16, color: '#10b981' }} />
+                              <Typography variant="body2" sx={{ color: '#0ea5e9' }}>
+                                {rec}
                       </Typography>
-                    ))}
+                            </Box>
+                          ))}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Análisis Detallado */}
+                  <Accordion sx={{ bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Psychology sx={{ color: '#3b82f6' }} />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                          Análisis Detallado
+                        </Typography>
                   </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={2}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                            Factores Considerados:
+                          </Typography>
+                          <Grid container spacing={1}>
+                            <Grid item xs={6}>
+                              <Chip label={`Base: ${prediccionInteligente.factores.base}`} size="small" />
+                            </Grid>
+                            <Grid item xs={6}>
+                              <Chip label={`Factor tipo: ${prediccionInteligente.factores.factor_tipo}`} size="small" />
+                            </Grid>
+                          </Grid>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                            Estadísticas Base:
+                          </Typography>
+                          <Grid container spacing={1}>
+                            <Grid item xs={4}>
+                              <Typography variant="body2">
+                                Media: {prediccionInteligente.estadisticas_base.media.toFixed(1)}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={4}>
+                              <Typography variant="body2">
+                                Mediana: {prediccionInteligente.estadisticas_base.mediana.toFixed(1)}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={4}>
+                              <Typography variant="body2">
+                                Desv: {prediccionInteligente.estadisticas_base.desviacion.toFixed(1)}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
                 </Box>
               ) : (
                 <Box sx={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
                   alignItems: 'center', 
-                  py: 4,
+                  py: 6,
                   color: '#64748b'
                 }}>
-                  <BarChart sx={{ fontSize: 48 }} />
+                  <AutoAwesome sx={{ fontSize: 64, mb: 2, color: '#cbd5e1' }} />
+                  <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
+                    Predictor Inteligente
+                  </Typography>
                   <Typography variant="body1" sx={{ 
-                    mt: 2, 
                     textAlign: 'center',
-                    color: 'text.primary',
-                    fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    textRendering: 'optimizeLegibility'
+                    maxWidth: 400
                   }}>
-                    Completa los parámetros y genera una predicción para ver los resultados completos por zona
+                    Completa los parámetros y genera una predicción inteligente con intervalos de confianza y detección de anomalías
                   </Typography>
                 </Box>
               )}
@@ -838,142 +1325,308 @@ export default function Predictor() {
         </Grid>
       </Grid>
 
-      {/* Card de Cumplimiento de Predicción */}
-      {cumplimiento.prediccionEsperada > 0 && (
-        <Grid container spacing={3} sx={{ mt: 3 }}>
-          <Grid item xs={12} md={4}>
-            <PrediccionCumplimientoCard
-              prediccionEsperada={cumplimiento.prediccionEsperada}
-              pedidosReales={cumplimiento.pedidosReales}
-              fecha={cumplimiento.fecha}
-              tipoCliente={cumplimiento.tipoCliente}
-            />
+      {/* Dashboard de Tracking */}
+      <Box sx={{ mt: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h6" sx={{ color: '#1e293b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Assessment sx={{ color: '#3b82f6' }} />
+            Dashboard de Tracking
+          </Typography>
+          <Button
+            variant="outlined"
+            onClick={() => setMostrarTracking(!mostrarTracking)}
+            startIcon={mostrarTracking ? <VisibilityOff /> : <Visibility />}
+            sx={{ borderColor: '#3b82f6', color: '#3b82f6' }}
+          >
+            {mostrarTracking ? 'Ocultar' : 'Mostrar'} Tracking
+          </Button>
+        </Box>
+
+        {mostrarTracking && (
+          <Grid container spacing={3}>
+            {/* Métricas Principales */}
+            <Grid item xs={12} md={6}>
+              <Card sx={{ bgcolor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#1e293b', fontWeight: 600 }}>
+                    📊 Métricas de Efectividad
+                  </Typography>
+                  
+                  {trackingMetricas ? (
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f0f9ff', borderRadius: 2 }}>
+                          <Typography variant="h4" sx={{ color: '#0ea5e9', fontWeight: 'bold' }}>
+                            {trackingMetricas.error_promedio}%
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#64748b' }}>
+                            Error Promedio
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f0fdf4', borderRadius: 2 }}>
+                          <Typography variant="h4" sx={{ color: '#10b981', fontWeight: 'bold' }}>
+                            {trackingMetricas.efectividad_promedio}%
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#64748b' }}>
+                            Efectividad
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#fef3c7', borderRadius: 2 }}>
+                          <Typography variant="h4" sx={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                            {trackingMetricas.predicciones_verificadas}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#64748b' }}>
+                            Verificadas
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f1f5f9', borderRadius: 2 }}>
+                          <Typography variant="h4" sx={{ color: '#64748b', fontWeight: 'bold' }}>
+                            {trackingMetricas.total_predicciones}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#64748b' }}>
+                            Total
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', py: 2 }}>
+                      Cargando métricas...
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Registrar Pedidos Reales */}
+            <Grid item xs={12} md={6}>
+              <Card sx={{ bgcolor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#1e293b', fontWeight: 600 }}>
+                    📝 Registrar Pedidos Reales
+                  </Typography>
+                  
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Fecha"
+                      type="date"
+                      value={fechaPedidosReales}
+                      onChange={(e) => setFechaPedidosReales(e.target.value)}
+                      fullWidth
+                      size="small"
+                    />
+                    <TextField
+                      label="Número de Pedidos Reales"
+                      type="number"
+                      value={pedidosRealesInput}
+                      onChange={(e) => setPedidosRealesInput(e.target.value)}
+                      fullWidth
+                      size="small"
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={registrarPedidosRealesHandler}
+                      disabled={!fechaPedidosReales || !pedidosRealesInput}
+                      sx={{ bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
+                    >
+                      Registrar Pedidos Reales
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
           </Grid>
+
+            {/* Últimas Predicciones */}
+            <Grid item xs={12}>
+              <Card sx={{ bgcolor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#1e293b', fontWeight: 600 }}>
+                    📈 Últimas Predicciones
+                  </Typography>
+                  
+                  {ultimasPredicciones.length > 0 ? (
+                    <Grid container spacing={2}>
+                      {ultimasPredicciones.slice(0, 6).map((pred, index) => (
+                        <Grid item xs={12} sm={6} md={4} key={index}>
+                          <Box sx={{ 
+                            p: 2, 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: 2,
+                            bgcolor: pred.verificada ? '#f0fdf4' : '#fef3c7'
+                          }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                              {pred.fecha}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+                              {pred.tipo_cliente}
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                              <Typography variant="h6" sx={{ color: '#3b82f6', fontWeight: 600 }}>
+                                {pred.prediccion}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                pedidos
+                              </Typography>
+                            </Box>
+                            <Chip 
+                              label={pred.verificada ? '✅ Verificada' : '⏳ Pendiente'}
+                              size="small"
+                              sx={{ 
+                                bgcolor: pred.verificada ? '#10b981' : '#f59e0b',
+                                color: 'white'
+                              }}
+                            />
+                            {pred.verificada && pred.error_porcentual && (
+                              <Typography variant="body2" sx={{ mt: 1, color: '#64748b' }}>
+                                Error: {pred.error_porcentual}%
+                              </Typography>
+                            )}
+                          </Box>
         </Grid>
-      )}
+                      ))}
+                    </Grid>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', py: 2 }}>
+                      No hay predicciones registradas
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Recomendaciones */}
+            {trackingReporte && trackingReporte.recomendaciones && trackingReporte.recomendaciones.length > 0 && (
+              <Grid item xs={12}>
+                <Card sx={{ bgcolor: '#f0f9ff', border: '1px solid #0ea5e9' }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2, color: '#0ea5e9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Lightbulb sx={{ color: '#0ea5e9' }} />
+                      Recomendaciones del Sistema
+                    </Typography>
+                    <Stack spacing={1}>
+                      {trackingReporte.recomendaciones.map((rec, idx) => (
+                        <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <CheckCircle sx={{ fontSize: 16, color: '#0ea5e9' }} />
+                          <Typography variant="body2" sx={{ color: '#0ea5e9' }}>
+                            {rec}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+          </Grid>
+        )}
+      </Box>
 
       {/* Historial de Predicciones */}
       {historialPredicciones.length > 0 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" sx={{ mb: 3, color: '#1e293b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
             <History sx={{ color: '#3b82f6' }} />
-            Historial de Análisis de Predicciones
+            Historial de Predicciones
           </Typography>
           
+          <Grid container spacing={2}>
           {historialPredicciones.map((analisis, index) => (
-            <Card key={index} sx={{ mb: 2 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b' }}>
-                      {analisis.titulo}
+              <Grid item xs={12} md={6} lg={4} key={index}>
+                <Card sx={{ 
+                  bgcolor: '#fff',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                  border: '1px solid #e2e8f0',
+                  '&:hover': { boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }
+                }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        {analisis.fecha}
                     </Typography>
-                    <Typography variant="body2" sx={{ 
-                      color: 'text.primary',
-                      fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                      WebkitFontSmoothing: 'antialiased',
-                      MozOsxFontSmoothing: 'grayscale',
-                      textRendering: 'optimizeLegibility'
-                    }}>
-                      {new Date(analisis.timestamp).toLocaleString('es-ES')}
-                    </Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => eliminarPrediccion(index)}
+                        sx={{ color: '#ef4444' }}
+                      >
+                        <Delete sx={{ fontSize: 16 }} />
+                      </IconButton>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    
+                    <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+                      {analisis.tipoCliente}
+                    </Typography>
+                    
+                    {analisis.prediccion && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Typography variant="h6" sx={{ color: '#3b82f6', fontWeight: 600 }}>
+                          {analisis.prediccion}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          pedidos
+                        </Typography>
+                      </Box>
+                    )}
+                    
+                    {analisis.rangoConfianza && (
                     <Chip 
-                      label={`${analisis.nivelConfianza}% confianza`}
-                      color={analisis.nivelConfianza >= 90 ? 'success' : analisis.nivelConfianza >= 75 ? 'warning' : 'error'}
+                        label={`Rango: ${analisis.rangoConfianza[0]}-${analisis.rangoConfianza[1]}`}
                       size="small"
-                    />
-                    <IconButton onClick={() => toggleHistorial(index)} size="small">
-                      {expandedHistorial[index] ? <ExpandLess /> : <ExpandMore />}
-                    </IconButton>
-                    <IconButton 
-                      onClick={() => eliminarPrediccion(index)} 
+                        sx={{ bgcolor: '#f0f9ff', color: '#0ea5e9', mb: 1 }}
+                      />
+                    )}
+                    
+                    {analisis.nivelConfianza && (
+                      <Chip 
+                        label={`${analisis.nivelConfianza}% confianza`}
                       size="small"
                       sx={{ 
-                        color: '#ef4444',
-                        '&:hover': { 
-                          bgcolor: '#fef2f2',
-                          color: '#dc2626'
-                        }
-                      }}
-                      title="Eliminar predicción"
+                          bgcolor: getColorConfianza(analisis.nivelConfianza),
+                          color: 'white',
+                          mb: 1
+                        }}
+                      />
+                    )}
+                    
+                    <Button
+                      size="small"
+                      onClick={() => toggleHistorial(index)}
+                      endIcon={expandedHistorial[index] ? <ExpandLess /> : <ExpandMore />}
+                      sx={{ color: '#3b82f6' }}
                     >
-                      <Delete />
-                    </IconButton>
-                  </Box>
-                </Box>
-                
-                <Typography variant="body1" sx={{ 
-                  mb: 2, 
-                  color: 'text.primary', 
-                  fontWeight: 500,
-                  fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                  WebkitFontSmoothing: 'antialiased',
-                  MozOsxFontSmoothing: 'grayscale',
-                  textRendering: 'optimizeLegibility'
-                }}>
+                      {expandedHistorial[index] ? 'Ocultar' : 'Ver detalles'}
+                    </Button>
+                    
+                    <Collapse in={expandedHistorial[index]}>
+                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #e2e8f0' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
                   {analisis.resumen}
                 </Typography>
 
-                <Collapse in={expandedHistorial[index]}>
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: '#1e293b' }}>
-                      Análisis Detallado:
-                    </Typography>
-                    
-                    {analisis.detalles.map((detalle, detalleIndex) => (
-                      <Box key={detalleIndex} sx={{ 
-                        display: 'flex', 
-                        alignItems: 'flex-start', 
-                        gap: 1, 
-                        mb: 1.5,
-                        p: 1,
-                        borderRadius: 1,
-                        bgcolor: detalle.tipo === 'success' ? '#f0fdf4' : 
-                                 detalle.tipo === 'warning' ? '#fffbeb' : '#eff6ff'
-                      }}>
+                        {analisis.detalles && analisis.detalles.length > 0 && (
+                          <Stack spacing={1}>
+                            {analisis.detalles.map((detalle, idx) => (
+                              <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {getIconoAnalisis(detalle.tipo)}
-                        <Typography variant="body2" sx={{ 
-                          color: 'text.primary',
-                          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                          WebkitFontSmoothing: 'antialiased',
-                          MozOsxFontSmoothing: 'grayscale',
-                          textRendering: 'optimizeLegibility'
-                        }}>
+                                <Typography variant="body2" sx={{ color: '#64748b' }}>
                           {detalle.mensaje}
                         </Typography>
                       </Box>
                     ))}
-                    
-                    <Divider sx={{ my: 2 }} />
-                    
-                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">Zonas Activas:</Typography>
-                        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-                          {analisis.zonasActivas.map((zona, zonaIndex) => (
-                            <Chip key={zonaIndex} label={zona} size="small" color="success" />
-                          ))}
-                        </Box>
-                      </Box>
-                      
-                      {analisis.zonasInactivas.length > 0 && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">Zonas Inactivas:</Typography>
-                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-                            {analisis.zonasInactivas.map((zona, zonaIndex) => (
-                              <Chip key={zonaIndex} label={zona} size="small" color="default" />
-                            ))}
-                          </Box>
-                        </Box>
-                      )}
-                    </Box>
+                          </Stack>
+                        )}
                   </Box>
                 </Collapse>
               </CardContent>
             </Card>
+              </Grid>
           ))}
+          </Grid>
         </Box>
       )}
     </Box>

@@ -14,7 +14,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { 
-  Add as AddIcon,
+  Add,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Event as EventIcon
@@ -178,7 +178,7 @@ const FunctionalCalendar = () => {
               '&:hover': { bgcolor: '#eff6ff' }
             }}
           >
-            <AddIcon />
+            <Add />
           </IconButton>
         </Tooltip>
       </Box>
@@ -232,7 +232,7 @@ const FunctionalCalendar = () => {
           <Box sx={{ mb: 2 }}>
             <Button
               variant="contained"
-              startIcon={<AddIcon />}
+                              startIcon={<Add />}
               onClick={() => handleDateClick(selectedDate)}
               sx={{ 
                 bgcolor: '#3b82f6',

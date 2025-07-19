@@ -18,8 +18,8 @@ export const RefreshProvider = ({ children }) => {
     setIsRefreshing(true);
     setLastRefresh(new Date());
     
-    // Simular un delay para mostrar la animación
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Delay mínimo para mostrar la animación de actualización
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Disparar evento personalizado para que todas las páginas se actualicen
     window.dispatchEvent(new CustomEvent('globalRefresh'));

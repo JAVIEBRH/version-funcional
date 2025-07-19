@@ -6,10 +6,13 @@ import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Tooltip from '@mui/material/Tooltip';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
 export default function Pedidos({ refreshTrigger = 0 }) {
   const [pedidos, setPedidos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // Fecha actual por defecto
   const [pagina, setPagina] = useState(1);
   const pedidosPorPagina = 10;
 
@@ -24,6 +27,9 @@ export default function Pedidos({ refreshTrigger = 0 }) {
       });
       setPedidos(pedidosOrdenados);
       console.log('Pedidos actualizados:', new Date().toLocaleTimeString());
+      
+
+      
       } catch (error) {
         setPedidos([]);
     }
@@ -52,8 +58,18 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     };
   }, [refreshTrigger]);
 
-  // Filtro de búsqueda
+  // Definir fecha seleccionada al principio
+  const fechaSeleccionada = selectedDate; // Formato YYYY-MM-DD
+
+  // Filtro de búsqueda que incluye fecha seleccionada
   const filteredPedidos = pedidos.filter(p => {
+    // Primero filtrar por fecha seleccionada
+    const fechaPedido = parseFecha(p.fecha);
+    if (!fechaPedido) return false;
+    const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
+    if (fechaPedidoStr !== fechaSeleccionada) return false;
+    
+    // Luego aplicar filtro de búsqueda
     const texto = `${p.fecha || ''} ${p.dire || ''} ${p.usuario || ''} ${p.precio || ''} ${p.status || ''}`.toLowerCase();
     return texto.includes(searchTerm.toLowerCase());
   });
@@ -107,11 +123,91 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     }
   };
 
-  // Cards de resumen sobre los pedidos filtrados
-  const ventasTotales = filteredPedidos.reduce((sum, p) => sum + (Number(p.precio) || 0), 0);
-  const countEfectivo = filteredPedidos.filter(p => (p.metodopago || '').toLowerCase().includes('efectivo')).length;
-  const countTransferencia = filteredPedidos.filter(p => (p.metodopago || '').toLowerCase().includes('transfer')).length;
-  const countTarjeta = filteredPedidos.filter(p => (p.metodopago || '').toLowerCase().includes('tarjeta')).length;
+  // Filtrar pedidos por fecha seleccionada
+  const pedidosFechaSeleccionadaCompletos = pedidos.filter(p => {
+    const fechaPedido = parseFecha(p.fecha);
+    if (!fechaPedido) return false;
+    const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
+    return fechaPedidoStr === fechaSeleccionada;
+  });
+
+  // Cards de resumen sobre los pedidos de la fecha seleccionada
+  const ventasTotales = pedidosFechaSeleccionadaCompletos.reduce((sum, p) => sum + (Number(p.precio) || 0), 0);
+  const countEfectivo = pedidosFechaSeleccionadaCompletos.filter(p => (p.metodopago || '').toLowerCase().includes('efectivo')).length;
+  const countTransferencia = pedidosFechaSeleccionadaCompletos.filter(p => (p.metodopago || '').toLowerCase().includes('transfer')).length;
+  const countTarjeta = pedidosFechaSeleccionadaCompletos.filter(p => (p.metodopago || '').toLowerCase().includes('tarjeta')).length;
+  
+  // Nuevos cálculos para pedidos del día seleccionado y bidones vendidos
+  
+  // Calcular pedidos y bidones de la FECHA SELECCIONADA usando TODOS los pedidos (no filtrados)
+  const pedidosFechaSeleccionada = pedidos.filter(p => {
+    const fechaPedido = parseFecha(p.fecha);
+    if (!fechaPedido) return false;
+    const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
+    return fechaPedidoStr === fechaSeleccionada;
+  }).length;
+  
+  // Calcular bidones vendidos en la fecha seleccionada usando TODOS los pedidos
+  const pedidosFechaSeleccionadaData = pedidos.filter(p => {
+    const fechaPedido = parseFecha(p.fecha);
+    if (!fechaPedido) return false;
+    const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
+    return fechaPedidoStr === fechaSeleccionada;
+  });
+  
+  const bidonesFechaSeleccionada = pedidosFechaSeleccionadaData.reduce((sum, p) => {
+    let cantidad = 1;
+    
+
+    
+    // Primero intentar obtener cantidad de campos específicos
+    if (p.cantidad) cantidad = Number(p.cantidad);
+    else if (p.cant) cantidad = Number(p.cant);
+    else if (p.qty) cantidad = Number(p.qty);
+    else if (p.quantity) cantidad = Number(p.quantity);
+    else if (p.bidones) cantidad = Number(p.bidones);
+    else if (p.unidades) cantidad = Number(p.unidades);
+    else cantidad = NaN; // Si no hay ningún campo, forzar NaN
+    
+    // Si no hay campo de cantidad específica, calcular basándose en el precio
+    if (isNaN(cantidad) || cantidad <= 0) {
+      const precio = Number(p.precio) || 0;
+      // Calcular bidones basándose en el precio real ($2,000 por bidón)
+      if (precio > 0) {
+        cantidad = Math.ceil(precio / 2000); // $2,000 por bidón
+      }
+    }
+    
+    return sum + cantidad; // Removido Math.max(1, cantidad) para usar el cálculo real
+  }, 0);
+  
+
+  
+
+  
+  // Calcular bidones vendidos
+  const bidonesVendidos = filteredPedidos.reduce((sum, p) => {
+    // Intentar obtener cantidad de diferentes campos posibles
+    let cantidad = 1; // Por defecto 1 bidón por pedido
+    
+    // Buscar en diferentes campos posibles
+    if (p.cantidad) cantidad = Number(p.cantidad);
+    else if (p.cant) cantidad = Number(p.cant);
+    else if (p.qty) cantidad = Number(p.qty);
+    else if (p.quantity) cantidad = Number(p.quantity);
+    else if (p.bidones) cantidad = Number(p.bidones);
+    else if (p.unidades) cantidad = Number(p.unidades);
+    
+    // Si no se pudo convertir a número, calcular basándose en el precio
+    if (isNaN(cantidad) || cantidad <= 0) {
+      const precio = Number(p.precio) || 0;
+      if (precio > 0) {
+        cantidad = Math.ceil(precio / 2000); // $2,000 por bidón
+      }
+    }
+    
+    return sum + cantidad; // Removido Math.max(1, cantidad) para usar el cálculo real
+  }, 0);
 
   return (
     <Box sx={{ 
@@ -128,6 +224,20 @@ export default function Pedidos({ refreshTrigger = 0 }) {
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b' }}>
               Historial de Pedidos
             </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <TextField
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                size="small"
+                sx={{ width: 200 }}
+                InputProps={{
+                  sx: { 
+                    fontWeight: 600,
+                    color: '#1e293b'
+                  }
+                }}
+              />
             <TextField
               placeholder="Buscar en historial..."
               value={searchTerm}
@@ -142,11 +252,12 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 ),
               }}
             />
+            </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
             <Card sx={{ minWidth: 220, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title="Suma total de ventas de los pedidos mostrados." placement="top" arrow>
+                <Tooltip title={`Suma total de ventas del ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>${ventasTotales.toLocaleString()}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -161,7 +272,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
             </Card>
             <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title="Cantidad de pedidos pagados en efectivo." placement="top" arrow>
+                <Tooltip title={`Pedidos pagados en efectivo el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{countEfectivo}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -176,7 +287,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
             </Card>
             <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title="Cantidad de pedidos pagados por transferencia." placement="top" arrow>
+                <Tooltip title={`Pedidos pagados por transferencia el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{countTransferencia}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -191,7 +302,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
             </Card>
             <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title="Cantidad de pedidos pagados con tarjeta." placement="top" arrow>
+                <Tooltip title={`Pedidos pagados con tarjeta el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{countTarjeta}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -202,6 +313,42 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                   MozOsxFontSmoothing: 'grayscale',
                   textRendering: 'optimizeLegibility'
                 }}>Tarjeta</Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <LocalShippingIcon sx={{ color: '#10b981', fontSize: 20 }} />
+                  <Tooltip title={`${pedidosFechaSeleccionada} pedidos realizados el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#10b981', cursor: 'pointer' }}>{pedidosFechaSeleccionada}</Typography>
+                  </Tooltip>
+                </Box>
+                <Typography variant="body1" sx={{ 
+                  color: 'text.primary', 
+                  fontWeight: 600,
+                  fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                  WebkitFontSmoothing: 'antialiased',
+                  MozOsxFontSmoothing: 'grayscale',
+                  textRendering: 'optimizeLegibility'
+                }}>Pedidos {selectedDate === new Date().toISOString().split('T')[0] ? 'Hoy' : 'del Día'}</Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <InventoryIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
+                  <Tooltip title={`${bidonesFechaSeleccionada} bidones vendidos el ${new Date(selectedDate).toLocaleDateString('es-ES')} | Total histórico: ${bidonesVendidos} bidones`} placement="top" arrow>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#f59e0b', cursor: 'pointer' }}>{bidonesFechaSeleccionada}</Typography>
+                  </Tooltip>
+                </Box>
+                <Typography variant="body1" sx={{ 
+                  color: 'text.primary', 
+                  fontWeight: 600,
+                  fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                  WebkitFontSmoothing: 'antialiased',
+                  MozOsxFontSmoothing: 'grayscale',
+                  textRendering: 'optimizeLegibility'
+                }}>Bidones {selectedDate === new Date().toISOString().split('T')[0] ? 'Hoy' : 'del Día'}</Typography>
               </CardContent>
             </Card>
           </Box>
