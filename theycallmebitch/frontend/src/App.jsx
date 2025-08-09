@@ -37,6 +37,27 @@ function App() {
         light: '#34d399',
         dark: '#059669',
       },
+      // Paleta de colores mejorada para alertas y estados
+      error: {
+        main: darkMode ? '#fca5a5' : '#7c2d12',
+        light: darkMode ? '#fecaca' : '#fed7aa',
+        dark: darkMode ? '#f87171' : '#92400e',
+      },
+      warning: {
+        main: darkMode ? '#fbbf24' : '#92400e',
+        light: darkMode ? '#fde68a' : '#fef3c7',
+        dark: darkMode ? '#f59e0b' : '#78350f',
+      },
+      info: {
+        main: darkMode ? '#60a5fa' : '#1e40af',
+        light: darkMode ? '#93c5fd' : '#dbeafe',
+        dark: darkMode ? '#3b82f6' : '#1e3a8a',
+      },
+      success: {
+        main: darkMode ? '#34d399' : '#059669',
+        light: darkMode ? '#6ee7b7' : '#d1fae5',
+        dark: darkMode ? '#10b981' : '#047857',
+      },
       background: {
         default: darkMode ? '#0f172a' : '#f8fafc',
         paper: darkMode ? '#1e293b' : '#ffffff',
@@ -46,6 +67,14 @@ function App() {
         secondary: darkMode ? '#94a3b8' : '#64748b',
       },
       divider: darkMode ? '#334155' : '#e2e8f0',
+      // Colores personalizados para estados
+      custom: {
+        critical: darkMode ? '#fca5a5' : '#7c2d12',
+        warning: darkMode ? '#fbbf24' : '#92400e',
+        info: darkMode ? '#60a5fa' : '#1e40af',
+        success: darkMode ? '#34d399' : '#059669',
+        neutral: darkMode ? '#94a3b8' : '#6b7280',
+      },
     },
     typography: {
       fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',

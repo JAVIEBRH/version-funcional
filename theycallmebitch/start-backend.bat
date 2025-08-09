@@ -10,8 +10,8 @@ echo Instalando dependencias...
 pip install -r requirements.txt
 
 echo.
-echo Iniciando servidor backend en http://localhost:8000
+echo Iniciando servidor backend en http://localhost:8001
 echo.
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
 
 pause 

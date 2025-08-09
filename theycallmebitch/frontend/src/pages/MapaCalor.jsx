@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
+import { Box, Typography, FormControl, Select, MenuItem, Card, CardContent, useTheme } from '@mui/material';
 import 'leaflet/dist/leaflet.css';
 import './MapaCalor.css';
 
@@ -72,14 +73,14 @@ function ZoomAwareCircles({ mapData }) {
             <p><strong>Cliente:</strong> {point.user}</p>
             <p><strong>Teléfono:</strong> {point.phone}</p>
             <p><strong>Total gastado:</strong> ${parseInt(point.total_spent).toLocaleString('es-CL')}</p>
+            <p><strong>Ticket promedio:</strong> ${parseInt(point.ticket_promedio || 0).toLocaleString('es-CL')}</p>
+            <p><strong>Último pedido:</strong> {point.fecha_ultimo_pedido || 'N/A'}</p>
             <p><strong>Concentración:</strong> {
               parseInt(point.total_spent) > 15000 ? 'Alta' :
               parseInt(point.total_spent) > 10000 ? 'Media-Alta' :
               parseInt(point.total_spent) > 6000 ? 'Media' :
               parseInt(point.total_spent) > 3000 ? 'Baja-Media' : 'Baja'
             }</p>
-            <p><strong>Coordenadas:</strong> {point.lat.toFixed(6)}, {point.lng.toFixed(6)}</p>
-            <p><strong>Zoom actual:</strong> {zoom.toFixed(1)}x</p>
           </div>
         </Popup>
       </Circle>
@@ -88,6 +89,7 @@ function ZoomAwareCircles({ mapData }) {
 }
 
 export default function MapaCalor() {
+  const theme = useTheme();
   const [mapData, setMapData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState(6); // meses por defecto
@@ -98,7 +100,7 @@ export default function MapaCalor() {
       setLoading(true);
       
       // Para períodos largos, no usar filtro de mes/año específico
-      let url = 'http://localhost:8000/heatmap';
+      let url = 'http://localhost:8001/heatmap';
       
       // Solo aplicar filtro de mes/año para períodos cortos (3-6 meses)
       if (filterPeriod <= 6) {
@@ -109,7 +111,7 @@ export default function MapaCalor() {
         const mes = targetDate.getMonth() + 1; // getMonth() devuelve 0-11
         const anio = targetDate.getFullYear();
         
-        url = `http://localhost:8000/heatmap?mes=${mes}&anio=${anio}`;
+        url = `http://localhost:8001/heatmap?mes=${mes}&anio=${anio}`;
       }
       
       console.log('Solicitando datos con URL:', url);
@@ -128,6 +130,8 @@ export default function MapaCalor() {
           user: point.user,
           phone: point.phone,
           total_spent: point.total_spent,
+          ticket_promedio: point.ticket_promedio,
+          fecha_ultimo_pedido: point.fecha_ultimo_pedido,
           isClient: true
         }));
         
@@ -168,79 +172,207 @@ export default function MapaCalor() {
 
   if (loading) {
     return (
-      <div className="mapa-calor">
-        <div className="page-header">
-          <h1>Mapa de Calor - Concentración de Pedidos</h1>
-          <p>Cargando datos del mapa...</p>
-        </div>
-      </div>
+      <Box sx={{ 
+        p: 3, 
+        ml: '280px',
+        bgcolor: 'background.default',
+        minHeight: '100vh'
+      }}>
+        <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+          <Typography variant="h4" sx={{ 
+            fontWeight: 700, 
+            color: 'text.primary',
+            mb: 1
+          }}>
+            Mapa de Calor - Concentración de Pedidos
+          </Typography>
+          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+            Cargando datos del mapa...
+          </Typography>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <div className="mapa-calor">
-      <div className="page-header">
-        <h1>Mapa de Calor - Concentración de Pedidos</h1>
-        <p>Visualiza las zonas con mayor concentración de pedidos en el período seleccionado</p>
-        
-        <div className="filter-controls">
-          <label>Período de análisis:</label>
-          <select 
-            value={filterPeriod} 
-            onChange={(e) => setFilterPeriod(Number(e.target.value))}
-            className="period-filter"
-          >
-            <option value={3}>Últimos 3 meses</option>
-            <option value={6}>Últimos 6 meses</option>
-            <option value={12}>Últimos 12 meses</option>
-          </select>
-        </div>
-      </div>
-      
-      <div className="map-container">
-        <MapContainer
-          center={[-33.6167, -70.5833]} // Puente Alto, Santiago
-          zoom={12}
-          style={{ height: '600px', width: '100%' }}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
+    <Box sx={{ 
+      p: 3, 
+      ml: '280px',
+      bgcolor: 'background.default',
+      minHeight: '100vh'
+    }}>
+      <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ 
+            fontWeight: 700, 
+            color: 'text.primary',
+            mb: 1
+          }}>
+            Mapa de Calor - Concentración de Pedidos
+          </Typography>
+          <Typography variant="body1" sx={{ 
+            color: 'text.secondary',
+            mb: 3
+          }}>
+            Visualiza las zonas con mayor concentración de pedidos en el período seleccionado
+          </Typography>
           
-          <ZoomAwareCircles mapData={mapData} />
-        </MapContainer>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2,
+            mb: 3
+          }}>
+            <Typography variant="body2" sx={{ 
+              fontWeight: 600, 
+              color: 'text.primary'
+            }}>
+              Período de análisis:
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <Select
+                value={filterPeriod}
+                onChange={(e) => setFilterPeriod(Number(e.target.value))}
+                sx={{
+                  borderRadius: 2,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: theme.palette.divider,
+                  },
+                }}
+              >
+                <MenuItem value={3}>Últimos 3 meses</MenuItem>
+                <MenuItem value={6}>Últimos 6 meses</MenuItem>
+                <MenuItem value={12}>Últimos 12 meses</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Box>
         
-        <div className="map-legend">
-          <h3>Leyenda - Concentración de Pedidos</h3>
-          <div className="legend-item">
-            <div className="legend-color" style={{ backgroundColor: '#00cc00' }}></div>
-            <span>Baja concentración (0 - $3.000)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ backgroundColor: '#99cc00' }}></div>
-            <span>Baja-Media ($3.001 - $6.000)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ backgroundColor: '#ffcc00' }}></div>
-            <span>Media ($6.001 - $10.000)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ backgroundColor: '#ff6600' }}></div>
-            <span>Media-Alta ($10.001 - $15.000)</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ backgroundColor: '#ff0000' }}></div>
-            <span>Alta concentración ($15.001+)</span>
-          </div>
-          <div className="legend-stats">
-            <p><strong>Total de pedidos mostrados:</strong> {mapData.length}</p>
-            <p><strong>Período:</strong> Últimos {filterPeriod} meses</p>
-            <p><strong>Total facturado:</strong> ${mapData.reduce((sum, point) => sum + parseInt(point.total_spent || 0), 0).toLocaleString('es-CL')}</p>
-            <p><em>💡 Los círculos se ajustan automáticamente al nivel de zoom</em></p>
-          </div>
-        </div>
-      </div>
-    </div>
+        <Card sx={{ 
+          bgcolor: 'background.paper',
+          boxShadow: theme.shadows[1],
+          borderRadius: 3,
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden'
+        }}>
+          <CardContent sx={{ p: 3 }}>
+            <MapContainer
+              center={[-33.6167, -70.5833]} // Puente Alto, Santiago
+              zoom={12}
+              style={{ height: '600px', width: '100%' }}
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+              
+              <ZoomAwareCircles mapData={mapData} />
+            </MapContainer>
+            
+            <Box sx={{ 
+              mt: 3, 
+              p: 2, 
+              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f9fafb',
+              borderRadius: 2,
+              border: `1px solid ${theme.palette.divider}`
+            }}>
+              <Typography variant="h6" sx={{ 
+                fontWeight: 600, 
+                color: 'text.primary',
+                mb: 2
+              }}>
+                Leyenda - Concentración de Pedidos
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: '50%', 
+                    bgcolor: '#00cc00',
+                    border: '2px solid white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Baja concentración (0 - $3.000)
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: '50%', 
+                    bgcolor: '#99cc00',
+                    border: '2px solid white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Baja-Media ($3.001 - $6.000)
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: '50%', 
+                    bgcolor: '#ffcc00',
+                    border: '2px solid white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Media ($6.001 - $10.000)
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: '50%', 
+                    bgcolor: '#ff6600',
+                    border: '2px solid white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Media-Alta ($10.001 - $15.000)
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: '50%', 
+                    bgcolor: '#ff0000',
+                    border: '2px solid white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Alta concentración ($15.001+)
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <Box sx={{ 
+                pt: 2, 
+                borderTop: `1px solid ${theme.palette.divider}`
+              }}>
+                <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
+                  <strong>Total de pedidos mostrados:</strong> {mapData.length}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
+                  <strong>Período:</strong> Últimos {filterPeriod} meses
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
+                  <strong>Total facturado:</strong> ${mapData.reduce((sum, point) => sum + parseInt(point.total_spent || 0), 0).toLocaleString('es-CL')}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                  💡 Los círculos se ajustan automáticamente al nivel de zoom
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
   );
 } 

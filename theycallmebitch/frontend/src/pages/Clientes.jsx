@@ -28,7 +28,11 @@ import {
   List,
   ListItem,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Badge,
+  Popover,
+  Divider,
+  useTheme
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -46,14 +50,28 @@ import {
   TrendingUp,
   Schedule,
   LocalShipping,
-  AttachMoney
+  AttachMoney,
+  Notifications as NotificationsIcon,
+  NotificationsActive as NotificationsActiveIcon
 } from '@mui/icons-material';
 import { getClientes, getPedidos } from '../services/api';
+import './Clientes.css';
 
 // Los datos de clientes ahora se obtienen del backend
 
-// Función para parsear fechas DD-MM-YYYY a Date con validación mejorada
-function parseFecha(fechaStr) {
+  // Función para formatear ticket promedio
+  const formatTicketPromedio = (ticket) => {
+    if (ticket >= 1000000) {
+      return `$${(ticket / 1000000).toFixed(1)}M`;
+    } else if (ticket >= 1000) {
+      return `$${(ticket / 1000).toFixed(1)}K`;
+    } else {
+      return `$${ticket.toLocaleString('es-CL')}`;
+    }
+  };
+
+  // Función para parsear fechas DD-MM-YYYY a Date con validación mejorada
+  function parseFecha(fechaStr) {
   if (!fechaStr || fechaStr.trim() === '') return null;
   
   try {
@@ -83,13 +101,70 @@ function parseFecha(fechaStr) {
 }
 
 export default function Clientes({ refreshTrigger = 0 }) {
+  const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [filterTipo, setFilterTipo] = useState('Todos');
   const [anchorEl, setAnchorEl] = useState(null);
+  const [showRiesgoTable, setShowRiesgoTable] = useState(false);
+  const [showVipTable, setShowVipTable] = useState(false);
   
   // Estados para datos reales
   const [clientes, setClientes] = useState([]);
+  
+  // Función para generar datos reales de clientes en riesgo
+  const generarClientesEnRiesgoData = () => {
+    const hoy = new Date();
+    
+    // Obtener clientes que están en riesgo (60-75 días sin comprar)
+    const clientesEnRiesgoReales = clientesConEstado.filter(c => {
+      const fechaUltimo = parseFecha(c.ultimo_pedido || '');
+      if (!fechaUltimo) return false;
+      const diff = (hoy - fechaUltimo) / (1000 * 60 * 60 * 24);
+      return diff > 60 && diff <= 75;
+    });
+
+    // Calcular ticket promedio para cada cliente
+    const clientesConTicketPromedio = clientesEnRiesgoReales.map(cliente => {
+      // Buscar todos los pedidos de este cliente
+      const pedidosCliente = pedidos.filter(p => {
+        const dirPedido = (p.dire || p.direccion || '').trim().toLowerCase();
+        const dirCliente = (cliente.direccion || '').trim().toLowerCase();
+        return dirPedido === dirCliente;
+      });
+
+      // Calcular ticket promedio
+      const totalComprado = pedidosCliente.reduce((sum, p) => sum + Number(p.precio || 0), 0);
+      const ticketPromedio = pedidosCliente.length > 0 ? totalComprado / pedidosCliente.length : 0;
+
+      // Calcular días sin comprar
+      const fechaUltimo = parseFecha(cliente.ultimo_pedido || '');
+      const diasSinComprar = fechaUltimo ? Math.floor((hoy - fechaUltimo) / (1000 * 60 * 60 * 24)) : 0;
+
+      // Formatear fecha de última compra
+      const ultimaCompra = fechaUltimo ? 
+        fechaUltimo.toLocaleDateString('es-ES', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        }).replace(/\//g, '-') : '';
+
+      return {
+        id: cliente.id || Math.random().toString(36).substr(2, 9),
+        nombre: cliente.nombre || cliente.direccion || 'Cliente',
+        direccion: cliente.direccion || 'Sin dirección',
+        email: cliente.email || '',
+        ultimaCompra: ultimaCompra,
+        ticketPromedio: Math.round(ticketPromedio),
+        diasSinComprar: diasSinComprar,
+        estado: diasSinComprar > 65 ? 'critico' : 'moderado'
+      };
+    });
+
+    // Ordenar por días sin comprar (descendente) y mostrar todos
+    return clientesConTicketPromedio
+      .sort((a, b) => b.diasSinComprar - a.diasSinComprar);
+  };
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -98,6 +173,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
   const [searchTermFrecuencia, setSearchTermFrecuencia] = useState('');
   const [clientesVIP, setClientesVIP] = useState([]);
   const [clientesFrecuencia, setClientesFrecuencia] = useState([]);
+
+  // Estados para notificaciones
+  const [notificationsAnchorEl, setNotificationsAnchorEl] = useState(null);
 
   // Función unificada para calcular estado activo/inactivo
   const calcularEstadoCliente = (fechaUltimo) => {
@@ -128,6 +206,64 @@ export default function Clientes({ refreshTrigger = 0 }) {
     const estado = calcularEstadoCliente(cliente.ultimo_pedido);
     return { ...cliente, estado };
   });
+
+  const clientesActivos = clientesConEstado.filter(c => c.estado === 'Activo');
+  const clientesInactivos = clientesConEstado.filter(c => c.estado === 'Inactivo');
+
+  // Datos reales de clientes en riesgo
+  const clientesEnRiesgoData = generarClientesEnRiesgoData();
+
+  // Función para generar datos reales de clientes VIP
+  const generarClientesVipData = () => {
+    const hoy = new Date();
+    
+    // Obtener clientes VIP (los que están tanto en VIP como en Frecuencia)
+    const clientesVipReales = clientesVIPyFrecuencia.map(cliente => {
+      // Buscar todos los pedidos de este cliente
+      const pedidosCliente = pedidos.filter(p => {
+        const dirPedido = (p.dire || p.direccion || '').trim().toLowerCase();
+        const dirCliente = (cliente.direccion || '').trim().toLowerCase();
+        return dirPedido === dirCliente;
+      });
+
+      // Calcular ticket promedio
+      const totalComprado = pedidosCliente.reduce((sum, p) => sum + Number(p.precio || 0), 0);
+      const ticketPromedio = pedidosCliente.length > 0 ? totalComprado / pedidosCliente.length : 0;
+
+      // Calcular días desde última compra
+      const fechaUltimo = parseFecha(cliente.ultimo_pedido || '');
+      const diasDesdeUltimaCompra = fechaUltimo ? Math.floor((hoy - fechaUltimo) / (1000 * 60 * 60 * 24)) : 0;
+
+      // Formatear fecha de última compra
+      const ultimaCompra = fechaUltimo ? 
+        fechaUltimo.toLocaleDateString('es-ES', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        }).replace(/\//g, '-') : '';
+
+      // Determinar estado basado en días desde última compra
+      const estado = diasDesdeUltimaCompra <= 75 ? 'activo' : 'inactivo';
+
+      return {
+        id: cliente.id || Math.random().toString(36).substr(2, 9),
+        nombre: cliente.nombre || cliente.direccion || 'Cliente',
+        direccion: cliente.direccion || 'Sin dirección',
+        email: cliente.email || '',
+        totalComprado: Math.round(totalComprado),
+        pedidos: cliente.pedidos || pedidosCliente.length,
+        ticketPromedio: Math.round(ticketPromedio),
+        ultimaCompra: ultimaCompra,
+        estado: estado
+      };
+    });
+
+    // Ordenar por total comprado (descendente) y mostrar todos
+    return clientesVipReales
+      .sort((a, b) => b.totalComprado - a.totalComprado);
+  };
+
+
 
   // Filtros de clientes (usar clientesConEstado)
   const filteredClientes = clientesConEstado.filter(cliente => {
@@ -390,6 +526,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
   const cantidadVIPyFrecuencia = clientesVIPyFrecuencia.length;
   const tooltipVIPyFrecuencia = clientesVIPyFrecuencia.map(c => c.direccion || 'Sin dirección').join('\n');
 
+  // Datos reales de clientes VIP
+  const clientesVipData = generarClientesVipData();
+
   // Calcular clientes reactivados
   const clientesReactivados = (() => {
     // Agrupar pedidos por dirección normalizada
@@ -429,15 +568,15 @@ export default function Clientes({ refreshTrigger = 0 }) {
   // Componente reutilizable para tabla de clientes
   const TablaClientes = ({ clientes, searchTerm, onSearchChange, titulo, mostrarDireccionSolo = false }) => (
     <Card sx={{ 
-      bgcolor: '#fff',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+      bgcolor: 'background.paper',
+      boxShadow: theme.shadows[1],
       borderRadius: 3,
-      border: '1px solid #f1f5f9',
+      border: `1px solid ${theme.palette.divider}`,
       mb: 3
     }}>
       <CardContent sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
             {titulo}
           </Typography>
           <TextField
@@ -449,12 +588,12 @@ export default function Clientes({ refreshTrigger = 0 }) {
               width: 300,
               '& .MuiOutlinedInput-root': {
                 borderRadius: 3,
-                bgcolor: '#f8fafc',
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc',
                 '& fieldset': {
-                  borderColor: '#e2e8f0',
+                  borderColor: theme.palette.divider,
                 },
                 '&:hover fieldset': {
-                  borderColor: '#cbd5e1',
+                  borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1',
                 },
                 '&.Mui-focused fieldset': {
                   borderColor: '#3b82f6',
@@ -464,7 +603,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon sx={{ color: '#64748b' }} />
+                  <SearchIcon sx={{ color: 'text.secondary' }} />
                 </InputAdornment>
               ),
             }}
@@ -474,35 +613,35 @@ export default function Clientes({ refreshTrigger = 0 }) {
         <TableContainer>
           <Table>
             <TableHead>
-              <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Cliente</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Contacto</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Estado</TableCell>
+              <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc' }}>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Cliente</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Contacto</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Estado</TableCell>
                 {mostrarDireccionSolo ? (
-                  <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Bidones por Pedido</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Bidones por Pedido</TableCell>
                 ) : (
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Tipo</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Tipo</TableCell>
                 )}
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Pedidos</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Total Comprado</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Último Pedido</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Acciones</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Pedidos</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Total Comprado</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Último Pedido</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {clientes.map((cliente) => (
-                <TableRow key={cliente.id} sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                <TableRow key={cliente.id} sx={{ '&:hover': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' } }}>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <Avatar sx={{ bgcolor: '#3b82f6' }}>
                         {(mostrarDireccionSolo ? (cliente.direccion || '?') : (cliente.nombre || '?')).charAt(0)}
                       </Avatar>
                       <Box>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                           {mostrarDireccionSolo ? (cliente.direccion || 'Sin dirección') : cliente.nombre}
                         </Typography>
                         <Typography variant="body2" sx={{ 
-                          color: '#1e293b', 
+                          color: 'text.secondary', 
                           fontWeight: 600,
                           fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                           WebkitFontSmoothing: 'antialiased',
@@ -517,9 +656,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
                   <TableCell>
                     <Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <EmailIcon sx={{ fontSize: 16, color: '#1e293b' }} />
+                        <EmailIcon sx={{ fontSize: 16, color: 'text.primary' }} />
                         <Typography variant="body2" sx={{ 
-                          color: '#1e293b', 
+                          color: 'text.primary', 
                           fontWeight: 600,
                           fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                           WebkitFontSmoothing: 'antialiased',
@@ -530,9 +669,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PhoneIcon sx={{ fontSize: 16, color: '#1e293b' }} />
+                        <PhoneIcon sx={{ fontSize: 16, color: 'text.primary' }} />
                         <Typography variant="body2" sx={{ 
-                          color: '#1e293b', 
+                          color: 'text.primary', 
                           fontWeight: 600,
                           fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                           WebkitFontSmoothing: 'antialiased',
@@ -549,15 +688,19 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       label={cliente.estado} 
                       size="small" 
                       sx={{ 
-                        bgcolor: cliente.estado === 'Activo' ? '#dcfce7' : '#fee2e2',
-                        color: cliente.estado === 'Activo' ? '#166534' : '#dc2626',
+                        bgcolor: cliente.estado === 'Activo' ? 
+                          (theme.palette.mode === 'dark' ? '#065f46' : '#dcfce7') : 
+                          (theme.palette.mode === 'dark' ? '#7f1d1d' : '#fee2e2'),
+                        color: cliente.estado === 'Activo' ? 
+                          (theme.palette.mode === 'dark' ? '#6ee7b7' : '#166534') : 
+                          (theme.palette.mode === 'dark' ? '#fca5a5' : '#dc2626'),
                         fontWeight: 600
                       }}
                     />
                   </TableCell>
                   {mostrarDireccionSolo ? (
                     <TableCell>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                         {cliente.bidonesPorPedido ? Math.round(cliente.bidonesPorPedido) : '0'}
                       </Typography>
                     </TableCell>
@@ -567,26 +710,30 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       label={cliente.tipo} 
                       size="small" 
                       sx={{ 
-                        bgcolor: cliente.tipo === 'VIP' ? '#fef3c7' : '#dbeafe',
-                        color: cliente.tipo === 'VIP' ? '#92400e' : '#1e40af',
+                        bgcolor: cliente.tipo === 'VIP' ? 
+                          (theme.palette.mode === 'dark' ? '#92400e' : '#fef3c7') : 
+                          (theme.palette.mode === 'dark' ? '#1e3a8a' : '#dbeafe'),
+                        color: cliente.tipo === 'VIP' ? 
+                          (theme.palette.mode === 'dark' ? '#fcd34d' : '#92400e') : 
+                          (theme.palette.mode === 'dark' ? '#93c5fd' : '#1e40af'),
                         fontWeight: 600
                       }}
                     />
                   </TableCell>
                   )}
                   <TableCell>
-                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {cliente.pedidos || 0}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       ${(cliente.total_comprado || 0).toLocaleString()}
                     </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ 
-                      color: '#1e293b', 
+                      color: 'text.primary', 
                       fontWeight: 600,
                       fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                       WebkitFontSmoothing: 'antialiased',
@@ -601,7 +748,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                   </TableCell>
                   <TableCell>
                     <IconButton onClick={handleMenuClick}>
-                      <MoreVertIcon />
+                      <MoreVertIcon sx={{ color: 'text.primary' }} />
                     </IconButton>
                   </TableCell>
                 </TableRow>
@@ -645,6 +792,40 @@ export default function Clientes({ refreshTrigger = 0 }) {
     });
     return count;
   })();
+
+  // Clientes nuevos del período anterior (75 días previos)
+  const clientesNuevosAnterior = (() => {
+    const hoy = new Date();
+    const hace150Dias = new Date(hoy.getTime() - 150 * 24 * 60 * 60 * 1000);
+    const hace75Dias = new Date(hoy.getTime() - 75 * 24 * 60 * 60 * 1000);
+    
+    // Agrupar pedidos por dirección normalizada
+    const pedidosPorDireccion = {};
+    pedidos.forEach(pedido => {
+      const dirNorm = (pedido.dire || pedido.direccion || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!dirNorm) return;
+      if (!pedidosPorDireccion[dirNorm]) pedidosPorDireccion[dirNorm] = [];
+      pedidosPorDireccion[dirNorm].push(pedido);
+    });
+    
+    let count = 0;
+    Object.values(pedidosPorDireccion).forEach(listaPedidos => {
+      if (!listaPedidos.length) return;
+      // Buscar la fecha más antigua
+      const fechas = listaPedidos.map(p => parseFecha(p.fecha)).filter(Boolean);
+      if (!fechas.length) return;
+      const fechaPrimera = fechas.reduce((a, b) => a < b ? a : b);
+      
+      // Verificar si la primera compra fue entre hace 150 y 75 días
+      if (fechaPrimera >= hace150Dias && fechaPrimera <= hace75Dias) {
+        count++;
+      }
+    });
+    return count;
+  })();
+
+  // Determinar si el crecimiento de clientes nuevos es positivo
+  const clientesNuevosCrecimiento = clientesNuevos - clientesNuevosAnterior;
 
   // Card: Clientes en Riesgo (60-75 días sin comprar)
   const clientesEnRiesgo = clientesConEstado.filter(c => {
@@ -741,11 +922,503 @@ export default function Clientes({ refreshTrigger = 0 }) {
       .slice(0, 15);
   })();
 
+  // Función para generar notificaciones
+  const generarNotificaciones = () => {
+    const notificaciones = [];
+    
+    // Clientes en riesgo (60-75 días sin comprar)
+    const clientesEnRiesgo = clientesConEstado.filter(c => {
+      const fechaUltimo = parseFecha(c.ultimo_pedido || '');
+      if (!fechaUltimo) return false;
+      const hoy = new Date();
+      const diff = (hoy - fechaUltimo) / (1000 * 60 * 60 * 24);
+      return diff > 60 && diff <= 75;
+    });
+    
+    clientesEnRiesgo.forEach(cliente => {
+      notificaciones.push({
+        id: `riesgo-${cliente.id}`,
+        tipo: 'warning',
+        titulo: 'Cliente en Riesgo',
+        mensaje: `${cliente.nombre || cliente.direccion} no ha comprado en ${Math.floor((new Date() - parseFecha(cliente.ultimo_pedido)) / (1000 * 60 * 60 * 24))} días`,
+        cliente: cliente,
+        timestamp: new Date()
+      });
+    });
+
+    // Clientes inactivos (más de 75 días) - Detallados
+    const clientesInactivos = clientesConEstado.filter(c => c.estado === 'Inactivo');
+    clientesInactivos.slice(0, 10).forEach(cliente => {
+      notificaciones.push({
+        id: `inactivo-${cliente.id}`,
+        tipo: 'error',
+        titulo: 'Cliente Inactivo',
+        mensaje: `${cliente.nombre || cliente.direccion} - Último pedido: ${cliente.ultimo_pedido || 'N/A'}`,
+        cliente: cliente,
+        timestamp: new Date()
+      });
+    });
+
+    // Resumen de clientes inactivos si hay muchos
+    if (clientesInactivos.length > 10) {
+      notificaciones.push({
+        id: 'inactivos-resumen',
+        tipo: 'error',
+        titulo: 'Resumen de Clientes Inactivos',
+        mensaje: `${clientesInactivos.length} clientes inactivos en total`,
+        count: clientesInactivos.length,
+        timestamp: new Date()
+      });
+    }
+
+    // Alertas de rendimiento
+    const tasaActividad = clientesConEstado.filter(c => c.estado === 'Activo').length / clientesConEstado.length * 100;
+    if (tasaActividad < 50) {
+      notificaciones.push({
+        id: 'tasa-actividad-baja',
+        tipo: 'error',
+        titulo: 'Tasa de Actividad Baja',
+        mensaje: `Solo ${tasaActividad.toFixed(1)}% de clientes activos`,
+        porcentaje: tasaActividad,
+        timestamp: new Date()
+      });
+    }
+
+    // Clientes VIP que no han comprado recientemente
+    const clientesVIPInactivos = clientesVIP.filter(c => c.estado === 'Inactivo');
+    if (clientesVIPInactivos.length > 0) {
+      notificaciones.push({
+        id: 'vip-inactivos',
+        tipo: 'warning',
+        titulo: 'VIP Inactivos',
+        mensaje: `${clientesVIPInactivos.length} clientes VIP inactivos`,
+        count: clientesVIPInactivos.length,
+        timestamp: new Date()
+      });
+    }
+
+    // Alertas de alta tasa de inactividad
+    if (clientesInactivos.length > clientesConEstado.filter(c => c.estado === 'Activo').length * 0.3) {
+      notificaciones.push({
+        id: 'alta-tasa-inactividad',
+        tipo: 'error',
+        titulo: 'Alta Tasa de Inactividad',
+        mensaje: 'Considerar campaña de reactivación urgente',
+        timestamp: new Date()
+      });
+    }
+
+    // Oportunidades de crecimiento
+    if (clientesInactivos.length > 0) {
+      notificaciones.push({
+        id: 'oportunidad-crecimiento',
+        tipo: 'info',
+        titulo: 'Oportunidad de Crecimiento',
+        mensaje: `${clientesInactivos.length} clientes potenciales para reactivar`,
+        count: clientesInactivos.length,
+        timestamp: new Date()
+      });
+    }
+
+    // Alertas de desarrollo de programa VIP
+    if (clientesVIP.length < 10) {
+      notificaciones.push({
+        id: 'desarrollo-vip',
+        tipo: 'info',
+        titulo: 'Desarrollar Programa VIP',
+        mensaje: 'Menos de 10 clientes VIP detectados',
+        count: clientesVIP.length,
+        timestamp: new Date()
+      });
+    }
+
+    // Clientes nuevos (últimos 30 días)
+    const clientesNuevos = (() => {
+      const hoy = new Date();
+      const pedidosPorDireccion = {};
+      pedidos.forEach(pedido => {
+        const dirNorm = (pedido.dire || pedido.direccion || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!dirNorm) return;
+        if (!pedidosPorDireccion[dirNorm]) pedidosPorDireccion[dirNorm] = [];
+        pedidosPorDireccion[dirNorm].push(pedido);
+      });
+      let count = 0;
+      Object.values(pedidosPorDireccion).forEach(listaPedidos => {
+        if (!listaPedidos.length) return;
+        const fechas = listaPedidos.map(p => parseFecha(p.fecha)).filter(Boolean);
+        if (!fechas.length) return;
+        const fechaPrimera = fechas.reduce((a, b) => a < b ? a : b);
+        const diff = (hoy - fechaPrimera) / (1000 * 60 * 60 * 24);
+        if (diff <= 30) count++;
+      });
+      return count;
+    })();
+
+    if (clientesNuevos > 0) {
+      notificaciones.push({
+        id: 'clientes-nuevos',
+        tipo: 'info',
+        titulo: 'Clientes Nuevos',
+        mensaje: `${clientesNuevos} nuevos clientes en los últimos 30 días`,
+        count: clientesNuevos,
+        timestamp: new Date()
+      });
+    }
+
+    // Clientes reactivados
+    if (clientesReactivados > 0) {
+      notificaciones.push({
+        id: 'clientes-reactivados',
+        tipo: 'info',
+        titulo: 'Clientes Reactivados',
+        mensaje: `${clientesReactivados} clientes reactivados exitosamente`,
+        count: clientesReactivados,
+        timestamp: new Date()
+      });
+    }
+
+    // Alertas de crecimiento
+    if (topCrecimiento.length > 0) {
+      const clientesConCrecimiento = topCrecimiento.filter(c => c.porcentajeCrecimiento > 50).length;
+      if (clientesConCrecimiento > 0) {
+        notificaciones.push({
+          id: 'crecimiento-positivo',
+          tipo: 'info',
+          titulo: 'Crecimiento Positivo',
+          mensaje: `${clientesConCrecimiento} clientes con crecimiento superior al 50%`,
+          count: clientesConCrecimiento,
+          timestamp: new Date()
+        });
+      }
+    }
+
+    // Alertas de churn alto
+    const churnPct = totalClientes > 0 ? Math.round((clientesInactivos.length / totalClientes) * 100) : 0;
+    if (churnPct > 40) {
+      notificaciones.push({
+        id: 'churn-alto',
+        tipo: 'error',
+        titulo: 'Churn Alto',
+        mensaje: `Tasa de churn del ${churnPct}% - Requiere atención inmediata`,
+        porcentaje: churnPct,
+        timestamp: new Date()
+      });
+    }
+
+    // Alertas de clientes de alto valor
+    if (cantidadVIPyFrecuencia > 0) {
+      notificaciones.push({
+        id: 'clientes-alto-valor',
+        tipo: 'info',
+        titulo: 'Clientes de Alto Valor',
+        mensaje: `${cantidadVIPyFrecuencia} clientes VIP y frecuentes identificados`,
+        count: cantidadVIPyFrecuencia,
+        timestamp: new Date()
+      });
+    }
+
+    return notificaciones;
+  };
+
+  const notificaciones = generarNotificaciones();
+  const notificacionesNoLeidas = notificaciones.length;
+
+  // Componente de tabla desplegable para clientes en riesgo
+  const TablaClientesEnRiesgo = () => {
+    if (!showRiesgoTable) return null;
+    
+    return (
+      <Box sx={{
+        position: 'absolute',
+        top: '100%',
+        left: '-600px',
+        right: 0,
+        zIndex: 1000,
+        transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        transform: 'translateY(0) scale(1)',
+        opacity: 1,
+        pointerEvents: 'auto',
+        filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.15))'
+      }}>
+        <Card sx={{ 
+          bgcolor: theme.palette.background.paper, 
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3), 0 8px 16px rgba(0,0,0,0.2)', 
+          borderRadius: 3, 
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden',
+          maxHeight: '60vh',
+          width: '100%',
+          backdropFilter: 'blur(10px)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+            pointerEvents: 'none',
+            zIndex: -1
+          }
+        }}>
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+                Clientes en Riesgo - Detalle
+              </Typography>
+            </Box>
+            
+            <TableContainer sx={{ maxHeight: '60vh' }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc' }}>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, width: '40px', fontSize: '1rem' }}>
+                      Estado
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Dirección / Email
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Días Sin Comprar
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Ticket Promedio
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {clientesEnRiesgoData
+                    .sort((a, b) => b.diasSinComprar - a.diasSinComprar)
+                    .map((cliente) => (
+                    <TableRow key={cliente.id} sx={{ 
+                      '&:hover': { 
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' 
+                      },
+                      transition: 'background-color 0.2s ease'
+                    }}>
+                      <TableCell>
+                        <Tooltip title={cliente.estado === 'critico' ? 'Cliente en riesgo crítico' : 'Cliente en riesgo moderado'} arrow>
+                          <Box sx={{ 
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            bgcolor: '#ef4444',
+                            border: '2px solid #dc2626',
+                            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
+                          }} />
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`${cliente.direccion} - ${cliente.email}`} arrow>
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1.1rem' }}>
+                              {cliente.direccion}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontSize: '1rem' }}>
+                              {cliente.email}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`Última compra: ${cliente.ultimaCompra}`} arrow>
+                          <Typography variant="body2" sx={{ 
+                            color: cliente.diasSinComprar > 65 ? '#ef4444' : '#f59e0b',
+                            fontWeight: 800,
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.1em',
+                            fontFamily: 'monospace'
+                          }}>
+                            {cliente.diasSinComprar} días
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`Ticket promedio: ${formatTicketPromedio(cliente.ticketPromedio)}`} arrow>
+                          <Typography variant="body2" sx={{ 
+                            color: theme.palette.text.primary, 
+                            fontWeight: 800, 
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.1em',
+                            fontFamily: 'monospace'
+                          }}>
+                            {formatTicketPromedio(cliente.ticketPromedio)}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  };
+
+  const TablaClientesVip = () => {
+    if (!showVipTable) return null;
+    
+    return (
+      <Box sx={{
+        position: 'absolute',
+        top: '100%',
+        left: '-600px',
+        right: 0,
+        zIndex: 1000,
+        transition: 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        transform: 'translateY(0) scale(1)',
+        opacity: 1,
+        pointerEvents: 'auto',
+        filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.15))'
+      }}>
+        <Card sx={{ 
+          bgcolor: theme.palette.background.paper, 
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3), 0 8px 16px rgba(0,0,0,0.2)', 
+          borderRadius: 3, 
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden',
+          maxHeight: '60vh',
+          width: '100%',
+          backdropFilter: 'blur(10px)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+            pointerEvents: 'none',
+            zIndex: -1
+          }
+        }}>
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+                Clientes VIP - Detalle
+              </Typography>
+            </Box>
+            
+            <TableContainer sx={{ maxHeight: '60vh' }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc' }}>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, width: '40px', fontSize: '1rem' }}>
+                      Estado
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Dirección / Email
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Total Comprado
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Pedidos
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1rem' }}>
+                      Ticket Promedio
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {clientesVipData
+                    .sort((a, b) => b.totalComprado - a.totalComprado)
+                    .map((cliente) => (
+                    <TableRow key={cliente.id} sx={{ 
+                      '&:hover': { 
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' 
+                      },
+                      transition: 'background-color 0.2s ease'
+                    }}>
+                      <TableCell>
+                        <Tooltip title={cliente.estado === 'activo' ? 'Cliente VIP activo' : 'Cliente VIP inactivo'} arrow>
+                          <Box sx={{ 
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            bgcolor: '#22c55e',
+                            border: '2px solid #16a34a',
+                            boxShadow: '0 2px 4px rgba(34, 197, 94, 0.3)'
+                          }} />
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`${cliente.direccion} - ${cliente.email}`} arrow>
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: theme.palette.text.primary, fontSize: '1.1rem' }}>
+                              {cliente.direccion}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: theme.palette.text.secondary, fontSize: '1rem' }}>
+                              {cliente.email}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`Total comprado: ${formatTicketPromedio(cliente.totalComprado)}`} arrow>
+                          <Typography variant="body2" sx={{ 
+                            color: theme.palette.text.primary, 
+                            fontWeight: 800, 
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.1em',
+                            fontFamily: 'monospace'
+                          }}>
+                            {formatTicketPromedio(cliente.totalComprado)}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`Número de pedidos: ${cliente.pedidos}`} arrow>
+                          <Typography variant="body2" sx={{ 
+                            color: theme.palette.text.primary, 
+                            fontWeight: 800, 
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.1em',
+                            fontFamily: 'monospace'
+                          }}>
+                            {cliente.pedidos}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title={`Ticket promedio: ${formatTicketPromedio(cliente.ticketPromedio)}`} arrow>
+                          <Typography variant="body2" sx={{ 
+                            color: theme.palette.text.primary, 
+                            fontWeight: 800, 
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.1em',
+                            fontFamily: 'monospace'
+                          }}>
+                            {formatTicketPromedio(cliente.ticketPromedio)}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  };
+
+  const handleNotificationsClick = (event) => {
+    setNotificationsAnchorEl(event.currentTarget);
+  };
+
+  const handleNotificationsClose = () => {
+    setNotificationsAnchorEl(null);
+  };
+
   return (
     <Box sx={{ 
       display: 'flex', 
       height: '100vh', 
-      bgcolor: '#f8fafc',
+      bgcolor: 'background.default',
       overflow: 'auto'
     }}>
       
@@ -759,15 +1432,22 @@ export default function Clientes({ refreshTrigger = 0 }) {
             justifyContent: 'space-between', 
             alignItems: 'center', 
             mb: 4,
-            bgcolor: '#fff',
+            bgcolor: 'background.paper',
             p: 3,
             borderRadius: 3,
-            boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
+            boxShadow: theme.shadows[1],
+            border: `1px solid ${theme.palette.divider}`
           }}>
             <Typography variant="h4" sx={{ 
               fontWeight: 700, 
-              color: '#1e293b',
-              fontSize: '2rem'
+              color: 'text.primary',
+              fontSize: '2rem',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"kern" 1',
+              fontKerning: 'normal'
             }}>
               Clientes
             </Typography>
@@ -782,12 +1462,12 @@ export default function Clientes({ refreshTrigger = 0 }) {
                   width: 300,
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 3,
-                    bgcolor: '#f8fafc',
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc',
                     '& fieldset': {
-                      borderColor: '#e2e8f0',
+                      borderColor: theme.palette.divider,
                     },
                     '&:hover fieldset': {
-                      borderColor: '#cbd5e1',
+                      borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1',
                     },
                     '&.Mui-focused fieldset': {
                       borderColor: '#3b82f6',
@@ -797,7 +1477,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ color: '#64748b' }} />
+                      <SearchIcon sx={{ color: 'text.secondary' }} />
                     </InputAdornment>
                   ),
                 }}
@@ -812,7 +1492,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                   sx={{
                     borderRadius: 3,
                     '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#e2e8f0',
+                      borderColor: theme.palette.divider,
                     },
                   }}
                 >
@@ -831,7 +1511,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                   sx={{
                     borderRadius: 3,
                     '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#e2e8f0',
+                      borderColor: theme.palette.divider,
                     },
                   }}
                 >
@@ -841,37 +1521,271 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 </Select>
               </FormControl>
 
-              <Button
-                variant="contained"
-                startIcon={<Add />}
+              {/* 🔔 CAMPANA DE NOTIFICACIONES */}
+              <Tooltip title="Notificaciones y Alertas" placement="bottom">
+                <IconButton
+                  onClick={handleNotificationsClick}
+                  sx={{
+                    bgcolor: notificacionesNoLeidas > 0 ? '#fef3c7' : 'transparent',
+                    '&:hover': {
+                      bgcolor: notificacionesNoLeidas > 0 ? '#fde68a' : '#f1f5f9'
+                    },
+                    borderRadius: 2,
+                    p: 1.5
+                  }}
+                >
+                  <Badge 
+                    badgeContent={notificacionesNoLeidas} 
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        bgcolor: notificacionesNoLeidas > 0 ? theme.palette.warning.dark : theme.palette.text.secondary,
+                        color: theme.palette.background.paper,
+                        fontWeight: 600
+                      }
+                    }}
+                  >
+                    {notificacionesNoLeidas > 0 ? (
+                      <NotificationsActiveIcon sx={{ color: theme.palette.warning.dark, fontSize: 24 }} />
+                    ) : (
+                      <NotificationsIcon sx={{ color: theme.palette.text.secondary, fontSize: 24 }} />
+                    )}
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+
+              {/* POPOVER DE NOTIFICACIONES */}
+              <Popover
+                open={Boolean(notificationsAnchorEl)}
+                anchorEl={notificationsAnchorEl}
+                onClose={handleNotificationsClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
                 sx={{
-                  bgcolor: '#10b981',
-                  '&:hover': { bgcolor: '#059669' },
-                  borderRadius: 3,
-                  px: 3,
-                  py: 1
+                  '& .MuiPaper-root': {
+                    borderRadius: 3,
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                    border: '1px solid #e2e8f0',
+                    minWidth: 450,
+                    maxWidth: 550,
+                    maxHeight: 700
+                  }
                 }}
               >
-                Nuevo Cliente
-              </Button>
+                <Box sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                      Alertas y Notificaciones
+                    </Typography>
+                    <Chip 
+                      label={notificacionesNoLeidas} 
+                      size="small" 
+                      sx={{ 
+                        fontWeight: 600,
+                        bgcolor: notificacionesNoLeidas > 0 ? theme.palette.warning.light : theme.palette.background.paper,
+                        color: notificacionesNoLeidas > 0 ? theme.palette.warning.dark : theme.palette.text.secondary,
+                        border: notificacionesNoLeidas > 0 ? `1px solid ${theme.palette.warning.main}` : `1px solid ${theme.palette.divider}`
+                      }}
+                    />
+                  </Box>
+                  
+                  <Divider sx={{ mb: 2 }} />
+                  
+                  {notificaciones.length === 0 ? (
+                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                      <CheckCircle sx={{ color: '#059669', fontSize: 48, mb: 2 }} />
+                      <Typography variant="body1" sx={{ color: '#64748b', fontWeight: 600 }}>
+                        ¡Todo en orden!
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                        No hay alertas pendientes
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ maxHeight: 500, overflow: 'auto' }}>
+                      {/* Agrupar notificaciones por tipo */}
+                      {(() => {
+                        const errores = notificaciones.filter(n => n.tipo === 'error');
+                        const warnings = notificaciones.filter(n => n.tipo === 'warning');
+                        const info = notificaciones.filter(n => n.tipo === 'info');
+                        
+                        return (
+                          <>
+                            {/* Errores */}
+                            {errores.length > 0 && (
+                              <Box sx={{ mb: 3 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.custom.critical, mb: 1 }}>
+                                  ⚠️ Clientes en Riesgo ({errores.length})
+                                </Typography>
+                                {errores.map((notif, index) => (
+                                  <Alert
+                                    key={notif.id}
+                                    severity="warning"
+                                    sx={{ 
+                                      mb: 1,
+                                      bgcolor: theme.palette.warning.light,
+                                      border: `1px solid ${theme.palette.warning.main}`,
+                                      '& .MuiAlert-icon': { color: theme.palette.warning.dark },
+                                      '& .MuiAlert-message': { width: '100%' }
+                                    }}
+                                  >
+                                    <Box>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                        {notif.titulo}
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+                                        {notif.mensaje}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                        {notif.timestamp.toLocaleTimeString('es-ES', { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit' 
+                                        })}
+                                      </Typography>
+                                    </Box>
+                                  </Alert>
+                                ))}
+                              </Box>
+                            )}
+
+                            {/* Warnings */}
+                            {warnings.length > 0 && (
+                              <Box sx={{ mb: 3 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.custom.info, mb: 1 }}>
+                                  ℹ️ Información ({warnings.length})
+                                </Typography>
+                                {warnings.map((notif, index) => (
+                                  <Alert
+                                    key={notif.id}
+                                    severity="info"
+                                    sx={{ 
+                                      mb: 1,
+                                      bgcolor: theme.palette.info.light,
+                                      border: `1px solid ${theme.palette.info.main}`,
+                                      '& .MuiAlert-icon': { color: theme.palette.info.dark },
+                                      '& .MuiAlert-message': { width: '100%' }
+                                    }}
+                                  >
+                                    <Box>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                        {notif.titulo}
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+                                        {notif.mensaje}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                        {notif.timestamp.toLocaleTimeString('es-ES', { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit' 
+                                        })}
+                                      </Typography>
+                                    </Box>
+                                  </Alert>
+                                ))}
+                              </Box>
+                            )}
+
+                            {/* Info */}
+                            {info.length > 0 && (
+                              <Box sx={{ mb: 3 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#3b82f6', mb: 1 }}>
+                                  🔵 Información ({info.length})
+                                </Typography>
+                                {info.map((notif, index) => (
+                                  <Alert
+                                    key={notif.id}
+                                    severity="info"
+                                    sx={{ 
+                                      mb: 1,
+                                      '& .MuiAlert-message': { width: '100%' }
+                                    }}
+                                  >
+                                    <Box>
+                                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                        {notif.titulo}
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+                                        {notif.mensaje}
+                                      </Typography>
+                                      <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                        {notif.timestamp.toLocaleTimeString('es-ES', { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit' 
+                                        })}
+                                      </Typography>
+                                    </Box>
+                                  </Alert>
+                                ))}
+                              </Box>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </Box>
+                  )}
+                  
+                  {notificaciones.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Button
+                          variant="text"
+                          size="small"
+                          onClick={() => {
+                            console.log('Marcar todas como leídas');
+                            handleNotificationsClose();
+                          }}
+                        >
+                          Marcar todas como leídas
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => {
+                            console.log('Ver todas las notificaciones');
+                            handleNotificationsClose();
+                          }}
+                        >
+                          Ver todas
+                        </Button>
+                      </Box>
+                    </>
+                  )}
+                </Box>
+              </Popover>
             </Box>
           </Box>
 
           {/* Estadísticas rápidas */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid xs={12} md={3}>
+          <Grid container columns={12} spacing={3} sx={{ mb: 4 }}>
+            <Grid span={3}>
               <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[1],
                 borderRadius: 3,
-                border: '1px solid #f1f5f9'
+                border: `1px solid ${theme.palette.divider}`
               }}>
                 <CardContent sx={{ p: 3 }}>
                   <Tooltip title="Cantidad total de clientes únicos registrados en el sistema." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{totalClientes}</Typography>
+                    <Typography variant="h4" sx={{ 
+                      fontWeight: 700, 
+                      color: 'text.primary', 
+                      cursor: 'pointer',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                      WebkitFontSmoothing: 'antialiased',
+                      MozOsxFontSmoothing: 'grayscale',
+                      textRendering: 'optimizeLegibility',
+                      fontFeatureSettings: '"kern" 1',
+                      fontKerning: 'normal'
+                    }}>{totalClientes}</Typography>
                   </Tooltip>
                   <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
+                    color: 'text.primary', 
                     fontWeight: 600,
                     fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     WebkitFontSmoothing: 'antialiased',
@@ -882,19 +1796,53 @@ export default function Clientes({ refreshTrigger = 0 }) {
               </Card>
             </Grid>
 
-            <Grid xs={12} md={3}>
+            <Grid span={3}>
               <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[1],
                 borderRadius: 3,
-                border: '1px solid #f1f5f9'
+                border: `1px solid ${theme.palette.divider}`,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '-50%',
+                  left: '-50%',
+                  width: '200%',
+                  height: '200%',
+                  background: 'linear-gradient(45deg, transparent, rgba(34, 197, 94, 0.6), transparent, rgba(34, 197, 94, 0.6), transparent)',
+                  animation: 'glowWave 5s ease-in-out infinite',
+                  zIndex: 0
+                },
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 3,
+                  boxShadow: '0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.6)',
+                  animation: 'glowPulse 4s ease-in-out infinite',
+                  zIndex: 1
+                },
+                '@keyframes glowWave': {
+                  '0%': { transform: 'translateX(-100%) translateY(-100%) rotate(0deg)' },
+                  '50%': { transform: 'translateX(100%) translateY(100%) rotate(180deg)' },
+                  '100%': { transform: 'translateX(-100%) translateY(-100%) rotate(360deg)' }
+                },
+                '@keyframes glowPulse': {
+                  '0%, 100%': { opacity: 0.7 },
+                  '50%': { opacity: 1 }
+                }
               }}>
-                <CardContent sx={{ p: 3 }}>
+                <CardContent sx={{ p: 3, position: 'relative', zIndex: 2 }}>
                   <Tooltip title="Clientes que han realizado al menos un pedido en los últimos 75 días." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{totalClientesActivos}</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{totalClientesActivos}</Typography>
                   </Tooltip>
                   <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
+                    color: 'text.primary', 
                     fontWeight: 600,
                     fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     WebkitFontSmoothing: 'antialiased',
@@ -905,42 +1853,19 @@ export default function Clientes({ refreshTrigger = 0 }) {
               </Card>
             </Grid>
 
-            <Grid xs={12} md={3}>
+            <Grid span={3}>
               <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[1],
                 borderRadius: 3,
-                border: '1px solid #f1f5f9'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Tooltip title="Clientes que están tanto en el top 15 de mayor dinero aportado como en el top 15 de mayor frecuencia de compra." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{cantidadVIPyFrecuencia}</Typography>
-                  </Tooltip>
-                  <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
-                    fontWeight: 600,
-                    fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    textRendering: 'optimizeLegibility'
-                  }}>Clientes VIP</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid xs={12} md={3}>
-              <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                borderRadius: 3,
-                border: '1px solid #f1f5f9'
+                border: `1px solid ${theme.palette.divider}`
               }}>
                 <CardContent sx={{ p: 3 }}>
                   <Tooltip title="Clientes que volvieron a comprar después de más de 75 días sin hacerlo." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{clientesReactivados}</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{clientesReactivados}</Typography>
                   </Tooltip>
                   <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
+                    color: 'text.primary', 
                     fontWeight: 600,
                     fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     WebkitFontSmoothing: 'antialiased',
@@ -951,19 +1876,125 @@ export default function Clientes({ refreshTrigger = 0 }) {
               </Card>
             </Grid>
 
-            <Grid xs={12} md={3}>
+            <Grid span={3}>
+              <Box sx={{ position: 'relative' }}>
+                <Card sx={{ 
+                  bgcolor: showVipTable ? theme.palette.primary.main : 'background.paper',
+                  boxShadow: showVipTable ? theme.shadows[4] : theme.shadows[1],
+                  borderRadius: 3,
+                  border: `1px solid ${showVipTable ? theme.palette.primary.main : theme.palette.divider}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[3],
+                    borderColor: theme.palette.primary.main
+                  }
+                }}
+                onClick={() => setShowVipTable(!showVipTable)}
+                >
+                  <CardContent sx={{ p: 3, position: 'relative' }}>
+                    <Tooltip title="Clientes que están tanto en el top 15 de mayor dinero aportado como en el top 15 de mayor frecuencia de compra. Click para ver detalles." placement="top" arrow>
+                      <Typography variant="h4" sx={{ 
+                        fontWeight: 700, 
+                        color: showVipTable ? 'white' : 'text.primary', 
+                        cursor: 'pointer',
+                        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale',
+                        textRendering: 'optimizeLegibility'
+                      }}>{cantidadVIPyFrecuencia}</Typography>
+                    </Tooltip>
+                    <Typography variant="body1" sx={{ 
+                      color: showVipTable ? 'white' : 'text.primary', 
+                      fontWeight: 600,
+                      fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                      WebkitFontSmoothing: 'antialiased',
+                      MozOsxFontSmoothing: 'grayscale',
+                      textRendering: 'optimizeLegibility'
+                    }}>Clientes VIP</Typography>
+                    
+                    {/* Icono de expansión que rota */}
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      bgcolor: showVipTable ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
+                      transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                      '&:hover': {
+                        bgcolor: showVipTable ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)',
+                        transform: 'scale(1.1)'
+                      }
+                    }}>
+                      <Add sx={{
+                        color: showVipTable ? '#ef4444' : 'text.secondary',
+                        fontSize: 20,
+                        transform: showVipTable ? 'rotate(45deg)' : 'rotate(0deg)',
+                        transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                        cursor: 'pointer'
+                      }} />
+                    </Box>
+                  </CardContent>
+                </Card>
+                
+                {/* Tabla desplegable que emerge del card */}
+                <TablaClientesVip />
+              </Box>
+            </Grid>
+
+            <Grid span={3}>
               <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[1],
                 borderRadius: 3,
-                border: '1px solid #f1f5f9'
+                border: `1px solid ${theme.palette.divider}`,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '-50%',
+                  left: '-50%',
+                  width: '200%',
+                  height: '200%',
+                  background: 'linear-gradient(45deg, transparent, rgba(239, 68, 68, 0.6), transparent, rgba(239, 68, 68, 0.6), transparent)',
+                  animation: 'glowWaveRed 5s ease-in-out infinite',
+                  zIndex: 0
+                },
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 3,
+                  boxShadow: '0 0 30px rgba(239, 68, 68, 0.8), 0 0 60px rgba(239, 68, 68, 0.6)',
+                  animation: 'glowPulseRed 4s ease-in-out infinite',
+                  zIndex: 1
+                },
+                '@keyframes glowWaveRed': {
+                  '0%': { transform: 'translateX(-100%) translateY(-100%) rotate(0deg)' },
+                  '50%': { transform: 'translateX(100%) translateY(100%) rotate(180deg)' },
+                  '100%': { transform: 'translateX(-100%) translateY(-100%) rotate(360deg)' }
+                },
+                '@keyframes glowPulseRed': {
+                  '0%, 100%': { opacity: 0.7 },
+                  '50%': { opacity: 1 }
+                }
               }}>
-                <CardContent sx={{ p: 3 }}>
+                <CardContent sx={{ p: 3, position: 'relative', zIndex: 2 }}>
                   <Tooltip title="Clientes que llevan más de 75 días sin comprar (churn absoluto y porcentaje)." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{churnAbs} ({churnPct}%)</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{churnAbs} ({churnPct}%)</Typography>
                   </Tooltip>
                   <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
+                    color: 'text.primary', 
                     fontWeight: 600,
                     fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     WebkitFontSmoothing: 'antialiased',
@@ -973,19 +2004,57 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid xs={12} md={3}>
+            <Grid span={3}>
               <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[1],
                 borderRadius: 3,
-                border: '1px solid #f1f5f9'
+                border: `1px solid ${theme.palette.divider}`,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '-50%',
+                  left: '-50%',
+                  width: '200%',
+                  height: '200%',
+                  background: clientesNuevosCrecimiento >= 0 ? 
+                    'linear-gradient(45deg, transparent, rgba(34, 197, 94, 0.6), transparent, rgba(34, 197, 94, 0.6), transparent)' :
+                    'linear-gradient(45deg, transparent, rgba(239, 68, 68, 0.6), transparent, rgba(239, 68, 68, 0.6), transparent)',
+                  animation: 'glowWaveNew 5s ease-in-out infinite',
+                  zIndex: 0
+                },
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 3,
+                  boxShadow: clientesNuevosCrecimiento >= 0 ? 
+                    '0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.6)' :
+                    '0 0 30px rgba(239, 68, 68, 0.8), 0 0 60px rgba(239, 68, 68, 0.6)',
+                  animation: 'glowPulseNew 4s ease-in-out infinite',
+                  zIndex: 1
+                },
+                '@keyframes glowWaveNew': {
+                  '0%': { transform: 'translateX(-100%) translateY(-100%) rotate(0deg)' },
+                  '50%': { transform: 'translateX(100%) translateY(100%) rotate(180deg)' },
+                  '100%': { transform: 'translateX(-100%) translateY(-100%) rotate(360deg)' }
+                },
+                '@keyframes glowPulseNew': {
+                  '0%, 100%': { opacity: 0.7 },
+                  '50%': { opacity: 1 }
+                }
               }}>
-                <CardContent sx={{ p: 3 }}>
+                <CardContent sx={{ p: 3, position: 'relative', zIndex: 2 }}>
                   <Tooltip title="Clientes cuya primera compra fue en los últimos 75 días." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{clientesNuevos}</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{clientesNuevos}</Typography>
                   </Tooltip>
                   <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
+                    color: 'text.primary', 
                     fontWeight: 600,
                     fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     WebkitFontSmoothing: 'antialiased',
@@ -995,66 +2064,115 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid xs={12} md={3}>
-              <Card sx={{ 
-                bgcolor: '#fff',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                borderRadius: 3,
-                border: '1px solid #f1f5f9'
-              }}>
-                <CardContent sx={{ p: 3 }}>
-                  <Tooltip title="Clientes que llevan entre 60 y 75 días sin comprar (cerca de volverse inactivos)." placement="top" arrow>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{clientesEnRiesgo}</Typography>
-                  </Tooltip>
-                  <Typography variant="body1" sx={{ 
-                    color: '#1e293b', 
-                    fontWeight: 600,
-                    fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    textRendering: 'optimizeLegibility'
-                  }}>Clientes en Riesgo</Typography>
-                </CardContent>
-              </Card>
+            <Grid span={3}>
+              <Box sx={{ position: 'relative' }}>
+                <Card sx={{ 
+                  bgcolor: showRiesgoTable ? theme.palette.primary.main : 'background.paper',
+                  boxShadow: showRiesgoTable ? theme.shadows[4] : theme.shadows[1],
+                  borderRadius: 3,
+                  border: `1px solid ${showRiesgoTable ? theme.palette.primary.main : theme.palette.divider}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[3],
+                    borderColor: theme.palette.primary.main
+                  }
+                }}
+                onClick={() => setShowRiesgoTable(!showRiesgoTable)}
+                >
+                  <CardContent sx={{ p: 3, position: 'relative' }}>
+                    <Tooltip title="Clientes que llevan entre 60 y 75 días sin comprar (cerca de volverse inactivos). Click para ver detalles." placement="top" arrow>
+                      <Typography variant="h4" sx={{ 
+                        fontWeight: 700, 
+                        color: showRiesgoTable ? 'white' : 'text.primary', 
+                        cursor: 'pointer',
+                        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale',
+                        textRendering: 'optimizeLegibility'
+                      }}>{clientesEnRiesgo}</Typography>
+                    </Tooltip>
+                    <Typography variant="body1" sx={{ 
+                      color: showRiesgoTable ? 'white' : 'text.primary', 
+                      fontWeight: 600,
+                      fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                      WebkitFontSmoothing: 'antialiased',
+                      MozOsxFontSmoothing: 'grayscale',
+                      textRendering: 'optimizeLegibility'
+                    }}>Clientes en Riesgo</Typography>
+                    
+                    {/* Icono de expansión que rota */}
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 12,
+                      right: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      bgcolor: showRiesgoTable ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
+                      transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                      '&:hover': {
+                        bgcolor: showRiesgoTable ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)',
+                        transform: 'scale(1.1)'
+                      }
+                    }}>
+                      <Add sx={{
+                        color: showRiesgoTable ? '#ef4444' : 'text.secondary',
+                        fontSize: 20,
+                        transform: showRiesgoTable ? 'rotate(45deg)' : 'rotate(0deg)',
+                        transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                        cursor: 'pointer'
+                      }} />
+                    </Box>
+                  </CardContent>
+                </Card>
+                
+                {/* Tabla desplegable que emerge del card */}
+                <TablaClientesEnRiesgo />
+              </Box>
             </Grid>
           </Grid>
 
           {/* Tabla de Clientes Principal */}
           <Card sx={{ 
-            bgcolor: '#fff',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+            bgcolor: 'background.paper',
+            boxShadow: theme.shadows[1],
             borderRadius: 3,
-            border: '1px solid #f1f5f9',
+            border: `1px solid ${theme.palette.divider}`,
             mb: 4
           }}>
             <TableContainer>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Cliente</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Contacto</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Estado</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Tipo</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Pedidos</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Total Comprado</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Último Pedido</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Acciones</TableCell>
+                  <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc' }}>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Cliente</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Contacto</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Estado</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Tipo</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Pedidos</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Total Comprado</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Último Pedido</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Acciones</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {clientesPagina.map((cliente) => (
-                    <TableRow key={cliente.id} sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                    <TableRow key={cliente.id} sx={{ '&:hover': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' } }}>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                           <Avatar sx={{ bgcolor: '#3b82f6' }}>
                             {cliente.nombre.charAt(0)}
                           </Avatar>
                           <Box>
-                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                               {cliente.nombre}
                             </Typography>
                             <Typography variant="body2" sx={{ 
-                              color: '#1e293b', 
+                              color: 'text.secondary', 
                               fontWeight: 600,
                               fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                               WebkitFontSmoothing: 'antialiased',
@@ -1069,9 +2187,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       <TableCell>
                         <Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                            <EmailIcon sx={{ fontSize: 16, color: '#1e293b' }} />
+                            <EmailIcon sx={{ fontSize: 16, color: 'text.primary' }} />
                             <Typography variant="body2" sx={{ 
-                              color: '#1e293b', 
+                              color: 'text.primary', 
                               fontWeight: 600,
                               fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                               WebkitFontSmoothing: 'antialiased',
@@ -1082,9 +2200,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <PhoneIcon sx={{ fontSize: 16, color: '#1e293b' }} />
+                            <PhoneIcon sx={{ fontSize: 16, color: 'text.primary' }} />
                             <Typography variant="body2" sx={{ 
-                              color: '#1e293b', 
+                              color: 'text.primary', 
                               fontWeight: 600,
                               fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                               WebkitFontSmoothing: 'antialiased',
@@ -1101,8 +2219,12 @@ export default function Clientes({ refreshTrigger = 0 }) {
                           label={cliente.estado} 
                           size="small" 
                           sx={{ 
-                            bgcolor: cliente.estado === 'Activo' ? '#dcfce7' : '#fee2e2',
-                            color: cliente.estado === 'Activo' ? '#166534' : '#dc2626',
+                            bgcolor: cliente.estado === 'Activo' ? 
+                              (theme.palette.mode === 'dark' ? '#065f46' : '#dcfce7') : 
+                              (theme.palette.mode === 'dark' ? '#7f1d1d' : '#fee2e2'),
+                            color: cliente.estado === 'Activo' ? 
+                              (theme.palette.mode === 'dark' ? '#6ee7b7' : '#166534') : 
+                              (theme.palette.mode === 'dark' ? '#fca5a5' : '#dc2626'),
                             fontWeight: 600
                           }}
                         />
@@ -1112,24 +2234,28 @@ export default function Clientes({ refreshTrigger = 0 }) {
                           label={cliente.tipo} 
                           size="small" 
                           sx={{ 
-                            bgcolor: cliente.tipo === 'VIP' ? '#fef3c7' : '#dbeafe',
-                            color: cliente.tipo === 'VIP' ? '#92400e' : '#1e40af',
+                            bgcolor: cliente.tipo === 'VIP' ? 
+                              (theme.palette.mode === 'dark' ? '#92400e' : '#fef3c7') : 
+                              (theme.palette.mode === 'dark' ? '#1e3a8a' : '#dbeafe'),
+                            color: cliente.tipo === 'VIP' ? 
+                              (theme.palette.mode === 'dark' ? '#fcd34d' : '#92400e') : 
+                              (theme.palette.mode === 'dark' ? '#93c5fd' : '#1e40af'),
                             fontWeight: 600
                           }}
                         />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                           {cliente.pedidos || 0}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                           ${(cliente.total_comprado || 0).toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                           {cliente.ultimo_pedido ? 
                             (() => {
                               const fecha = parseFecha(cliente.ultimo_pedido);
@@ -1141,7 +2267,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                                     <Typography variant="body2" sx={{ color: '#dc2626', fontSize: '0.75rem' }}>
                                       Fecha inválida
                                     </Typography>
-                                    <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.75rem' }}>
+                                    <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                                       {cliente.ultimo_pedido}
                                     </Typography>
                                   </Box>
@@ -1153,7 +2279,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       </TableCell>
                       <TableCell>
                         <IconButton onClick={handleMenuClick}>
-                          <MoreVertIcon />
+                          <MoreVertIcon sx={{ color: 'text.primary' }} />
                         </IconButton>
                       </TableCell>
                     </TableRow>
@@ -1240,26 +2366,32 @@ export default function Clientes({ refreshTrigger = 0 }) {
           />
 
           {/* Top 15 Clientes con Mayor Crecimiento (con pestañas de período) */}
-          <Card sx={{ bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9', mb: 4 }}>
+          <Card sx={{ 
+            bgcolor: theme.palette.background.paper, 
+            boxShadow: theme.shadows[3], 
+            borderRadius: 3, 
+            border: `1px solid ${theme.palette.divider}`, 
+            mb: 4 
+          }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
                   Top 15 Clientes con Mayor % de Crecimiento
                 </Typography>
                 
                 {/* Pestañas de período */}
-                <Box sx={{ display: 'flex', bgcolor: '#f1f5f9', borderRadius: 2, p: 0.5 }}>
+                <Box sx={{ display: 'flex', bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9', borderRadius: 2, p: 0.5 }}>
                   <Button
                     onClick={() => setPeriodoCrecimiento('12meses')}
                     sx={{
                       px: 3,
                       py: 1,
                       borderRadius: 1.5,
-                      bgcolor: periodoCrecimiento === '12meses' ? '#3b82f6' : 'transparent',
-                      color: periodoCrecimiento === '12meses' ? '#fff' : '#64748b',
+                      bgcolor: periodoCrecimiento === '12meses' ? theme.palette.primary.main : 'transparent',
+                      color: periodoCrecimiento === '12meses' ? '#fff' : theme.palette.text.secondary,
                       fontWeight: periodoCrecimiento === '12meses' ? 600 : 400,
                       '&:hover': {
-                        bgcolor: periodoCrecimiento === '12meses' ? '#2563eb' : '#e2e8f0'
+                        bgcolor: periodoCrecimiento === '12meses' ? theme.palette.primary.dark : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'
                       }
                     }}
                   >
@@ -1271,11 +2403,11 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       px: 3,
                       py: 1,
                       borderRadius: 1.5,
-                      bgcolor: periodoCrecimiento === '6meses' ? '#3b82f6' : 'transparent',
-                      color: periodoCrecimiento === '6meses' ? '#fff' : '#64748b',
+                      bgcolor: periodoCrecimiento === '6meses' ? theme.palette.primary.main : 'transparent',
+                      color: periodoCrecimiento === '6meses' ? '#fff' : theme.palette.text.secondary,
                       fontWeight: periodoCrecimiento === '6meses' ? 600 : 400,
                       '&:hover': {
-                        bgcolor: periodoCrecimiento === '6meses' ? '#2563eb' : '#e2e8f0'
+                        bgcolor: periodoCrecimiento === '6meses' ? theme.palette.primary.dark : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'
                       }
                     }}
                   >
@@ -1287,18 +2419,18 @@ export default function Clientes({ refreshTrigger = 0 }) {
               <TableContainer>
                 <Table>
                   <TableHead>
-                    <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Dirección</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Crecimiento ($)</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>% Crecimiento</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>
+                    <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc' }}>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>Dirección</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>Crecimiento ($)</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>% Crecimiento</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
                         {topCrecimiento.length > 0 ? topCrecimiento[0].nombrePeriodoActual : 'Período Actual'}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
                         {topCrecimiento.length > 0 ? topCrecimiento[0].nombrePeriodoAnterior : 'Período Anterior'}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Promedio actual</TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>Promedio anterior</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>Promedio actual</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: theme.palette.text.primary }}>Promedio anterior</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1307,7 +2439,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         <TableCell>
                           <Typography variant="body1" sx={{ 
                             fontWeight: 600, 
-                            color: '#1e293b',
+                            color: theme.palette.text.primary,
                             WebkitFontSmoothing: 'antialiased',
                             MozOsxFontSmoothing: 'grayscale',
                             textRendering: 'optimizeLegibility',
@@ -1343,7 +2475,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                           <Box>
                             <Typography variant="body1" sx={{ 
                               fontWeight: 600, 
-                              color: '#1e293b',
+                              color: theme.palette.text.primary,
                               WebkitFontSmoothing: 'antialiased',
                               MozOsxFontSmoothing: 'grayscale',
                               textRendering: 'optimizeLegibility',
@@ -1352,7 +2484,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                               ${c.montoPeriodoActual.toLocaleString()}
                             </Typography>
                             <Typography variant="body2" sx={{ 
-                              color: '#64748b',
+                              color: theme.palette.text.secondary,
                               WebkitFontSmoothing: 'antialiased',
                               MozOsxFontSmoothing: 'grayscale',
                               textRendering: 'optimizeLegibility',
@@ -1366,7 +2498,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                           <Box>
                             <Typography variant="body1" sx={{ 
                               fontWeight: 600, 
-                              color: '#1e293b',
+                              color: theme.palette.text.primary,
                               WebkitFontSmoothing: 'antialiased',
                               MozOsxFontSmoothing: 'grayscale',
                               textRendering: 'optimizeLegibility',
@@ -1375,7 +2507,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                               ${c.montoPeriodoAnterior.toLocaleString()}
                             </Typography>
                             <Typography variant="body2" sx={{ 
-                              color: '#64748b',
+                              color: theme.palette.text.secondary,
                               WebkitFontSmoothing: 'antialiased',
                               MozOsxFontSmoothing: 'grayscale',
                               textRendering: 'optimizeLegibility',
@@ -1387,7 +2519,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ 
-                            color: '#64748b',
+                            color: theme.palette.text.secondary,
                             WebkitFontSmoothing: 'antialiased',
                             MozOsxFontSmoothing: 'grayscale',
                             textRendering: 'optimizeLegibility',
@@ -1398,7 +2530,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ 
-                            color: '#64748b',
+                            color: theme.palette.text.secondary,
                             WebkitFontSmoothing: 'antialiased',
                             MozOsxFontSmoothing: 'grayscale',
                             textRendering: 'optimizeLegibility',
@@ -1417,233 +2549,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
         </Box>
       </Box>
 
-      {/* 🔔 SECCIÓN DE ALERTAS INTELIGENTES */}
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h5" sx={{ 
-          fontWeight: 700, 
-          color: '#1e293b', 
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1
-        }}>
-          <Warning sx={{ color: '#f59e0b' }} />
-          Alertas Inteligentes
-        </Typography>
-
-        <Grid container spacing={3}>
-          {/* Alertas de Clientes Inactivos */}
-          <Grid item xs={12} md={6}>
-            <Card sx={{ 
-              bgcolor: '#fff', 
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
-              borderRadius: 3, 
-              border: '1px solid #f1f5f9',
-              height: '100%'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <Error sx={{ color: '#dc2626', fontSize: 28 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
-                    Clientes en Riesgo
-                  </Typography>
-                </Box>
-
-                {clientesConEstado.filter(c => c.estado === 'Inactivo').slice(0, 5).map((cliente, index) => (
-                  <Alert 
-                    key={index}
-                    severity="warning" 
-                    sx={{ mb: 2 }}
-                    action={
-                      <Button color="inherit" size="small">
-                        Contactar
-                      </Button>
-                    }
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {cliente.nombre || cliente.direccion}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#64748b' }}>
-                      Último pedido: {cliente.ultimo_pedido || 'N/A'}
-                    </Typography>
-                  </Alert>
-                ))}
-
-                {clientesConEstado.filter(c => c.estado === 'Inactivo').length === 0 && (
-                  <Alert severity="success">
-                    ¡Excelente! No hay clientes inactivos.
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Alertas de Demanda */}
-          <Grid item xs={12} md={6}>
-            <Card sx={{ 
-              bgcolor: '#fff', 
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
-              borderRadius: 3, 
-              border: '1px solid #f1f5f9',
-              height: '100%'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <TrendingDown sx={{ color: '#f59e0b', fontSize: 28 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
-                    Análisis de Demanda
-                  </Typography>
-                </Box>
-
-                {/* Calcular métricas de demanda */}
-                {(() => {
-                  const clientesActivos = clientesConEstado.filter(c => c.estado === 'Activo');
-                  const clientesInactivos = clientesConEstado.filter(c => c.estado === 'Inactivo');
-                  const tasaActividad = clientesActivos.length / (clientesActivos.length + clientesInactivos.length) * 100;
-                  
-                  return (
-                    <>
-                      <Alert 
-                        severity={tasaActividad >= 70 ? "success" : tasaActividad >= 50 ? "warning" : "error"}
-                        sx={{ mb: 2 }}
-                      >
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Tasa de Actividad: {tasaActividad.toFixed(1)}%
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b' }}>
-                          {clientesActivos.length} activos / {clientesInactivos.length} inactivos
-                        </Typography>
-                      </Alert>
-
-                      {clientesInactivos.length > clientesActivos.length * 0.3 && (
-                        <Alert severity="warning" sx={{ mb: 2 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Alta tasa de inactividad detectada
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: '#64748b' }}>
-                            Considerar campaña de reactivación
-                          </Typography>
-                        </Alert>
-                      )}
-
-                      {clientesActivos.length > 0 && (
-                        <Alert severity="info">
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Oportunidad de crecimiento
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: '#64748b' }}>
-                            {clientesInactivos.length} clientes potenciales para reactivar
-                          </Typography>
-                        </Alert>
-                      )}
-                    </>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Alertas de Rendimiento */}
-          <Grid item xs={12}>
-            <Card sx={{ 
-              bgcolor: '#fff', 
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
-              borderRadius: 3, 
-              border: '1px solid #f1f5f9'
-            }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                  <AttachMoney sx={{ color: '#059669', fontSize: 28 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b' }}>
-                    Análisis de Rendimiento
-                  </Typography>
-                </Box>
-
-                <Grid container spacing={3}>
-                  {/* Métricas de rendimiento */}
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
-                      <Typography variant="h4" sx={{ fontWeight: 800, color: '#059669' }}>
-                        {clientesVIP.length}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                        Clientes VIP
-                      </Typography>
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
-                      <Typography variant="h4" sx={{ fontWeight: 800, color: '#3b82f6' }}>
-                        {clientesFrecuencia.length}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                        Clientes Frecuentes
-                      </Typography>
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
-                      <Typography variant="h4" sx={{ fontWeight: 800, color: '#f59e0b' }}>
-                        {cantidadVIPyFrecuencia}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                        VIP + Frecuentes
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-
-                {/* Recomendaciones */}
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                    Recomendaciones Automáticas
-                  </Typography>
-                  
-                  <List>
-                    {clientesVIP.length < 10 && (
-                      <ListItem>
-                        <ListItemIcon>
-                          <TrendingUp sx={{ color: '#059669' }} />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Desarrollar programa VIP"
-                          secondary="Menos de 10 clientes VIP detectados"
-                        />
-                      </ListItem>
-                    )}
-
-                    {clientesInactivos.length > 20 && (
-                      <ListItem>
-                        <ListItemIcon>
-                          <Schedule sx={{ color: '#f59e0b' }} />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Campaña de reactivación urgente"
-                          secondary={`${clientesInactivos.length} clientes inactivos`}
-                        />
-                      </ListItem>
-                    )}
-
-                    {cantidadVIPyFrecuencia > 0 && (
-                      <ListItem>
-                        <ListItemIcon>
-                          <CheckCircle sx={{ color: '#059669' }} />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary="Clientes de alto valor identificados"
-                          secondary={`${cantidadVIPyFrecuencia} clientes VIP y frecuentes`}
-                        />
-                      </ListItem>
-                    )}
-                  </List>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
+      {/* Sección eliminada - Las alertas ahora están en la campana de notificaciones */}
 
       {/* Menú de acciones */}
       <Menu

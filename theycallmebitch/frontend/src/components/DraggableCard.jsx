@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTheme } from '@mui/material/styles';
+import { Box } from '@mui/material';
 
 export default function DraggableCard({ 
   children, 
@@ -9,6 +11,7 @@ export default function DraggableCard({
   onResize,
   minSize = { width: 200, height: 150 }
 }) {
+  const theme = useTheme();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -70,9 +73,9 @@ export default function DraggableCard({
   }, [isDragging, isResizing, dragOffset]);
 
   return (
-    <div
+    <Box
       ref={cardRef}
-      style={{
+      sx={{
         position: 'absolute',
         left: position.x,
         top: position.y,
@@ -82,39 +85,44 @@ export default function DraggableCard({
         userSelect: 'none',
         zIndex: isDragging || isResizing ? 1000 : 1,
         transform: isDragging ? 'scale(1.02)' : 'scale(1)',
-        transition: isDragging ? 'none' : 'transform 0.2s ease'
+        transition: isDragging ? 'none' : 'transform 0.2s ease',
+        borderRadius: 'inherit'
       }}
       onMouseDown={handleMouseDown}
     >
-      <div style={{ 
+      <Box sx={{ 
         position: 'relative', 
         width: '100%', 
         height: '100%',
         borderRadius: 'inherit'
       }}>
         {children}
-        <div
+        <Box
           className="resize-handle"
-          style={{
+          sx={{
             position: 'absolute',
             bottom: 0,
             right: 0,
             width: 20,
             height: 20,
             cursor: 'nw-resize',
-            background: 'rgba(0, 0, 0, 0.1)',
+            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
             borderRadius: '0 0 8px 0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '12px',
-            color: 'rgba(0, 0, 0, 0.5)'
+            color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+            transition: 'background 0.2s ease',
+            '&:hover': {
+              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'
+            }
           }}
           onMouseDown={handleResizeStart}
         >
           ↙
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 } 

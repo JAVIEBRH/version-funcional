@@ -16,7 +16,6 @@ import BidonesCard from '../components/BidonesCard';
 import IvaCard from '../components/IvaCard';
 import CostosCard from '../components/CostosCard';
 import UtilidadesCard from '../components/UtilidadesCard';
-import DraggableCard from '../components/DraggableCard';
 import RentabilidadCard from '../components/RentabilidadCard';
 import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas } from '../services/api';
 import './Home.css';
@@ -49,7 +48,16 @@ export default function Home() {
     capacidadUtilizada: 0,
     litrosVendidos: 0,
     capacidadTotal: 30000,
-    ventasHistoricas: []
+    ventasHistoricas: [],
+    costosMesPasado: 0,
+    bidonesMesPasado: 0,
+    ivaMesPasado: 0,
+    utilidadesMesPasado: 0,
+    ticketPromedioMesPasado: 0,
+    clientesActivosMesPasado: 0,
+    clientesInactivosMesPasado: 0,
+    porcentajeCambioProyectado: 0,
+    esPositivoProyectado: false
   });
 
   const [loading, setLoading] = useState(true);
@@ -60,6 +68,16 @@ export default function Home() {
   const calcularPorcentajeCambio = (actual, anterior) => {
     if (anterior === 0) return actual > 0 ? 100 : 0;
     return ((actual - anterior) / anterior) * 100;
+  };
+
+  // Función para calcular porcentaje de cambio proyectado al mismo día
+  const calcularPorcentajeCambioProyectado = (actual, anterior, diasActuales, diasAnterior) => {
+    if (anterior === 0) return actual > 0 ? 100 : 0;
+    
+    // Proyectar el mes anterior al mismo número de días
+    const anteriorProyectado = (anterior / diasAnterior) * diasActuales;
+    
+    return ((actual - anteriorProyectado) / anteriorProyectado) * 100;
   };
 
   // Función para calcular ticket promedio
@@ -123,6 +141,10 @@ export default function Home() {
       const progresoMeta = calcularProgresoMeta(kpisData.ventas_mes, meta);
       const ticketPromedio = calcularTicketPromedio(kpisData.ventas_mes, kpisData.total_pedidos_mes);
       
+      // Calcular costos del mes pasado (aproximación basada en bidones vendidos)
+      const bidonesMesPasado = Math.round((kpisData.litros_vendidos_mes_pasado || 0) / 20);
+      const costosMesPasado = 260000 + (bidonesMesPasado * 60.69); // Cuota camión + costos variables
+      
       // Calcular clientes inactivos (aproximación)
       const clientesInactivos = Math.max(0, Math.round(kpisData.clientes_activos * 0.2));
 
@@ -133,6 +155,31 @@ export default function Home() {
       
       // Calcular bidones vendidos (cada bidón = 20 litros)
       const bidonesVendidos = Math.round(litrosVendidos / 20);
+
+      // Calcular días transcurridos en el mes actual
+      const hoy = new Date();
+      const diasActuales = hoy.getDate();
+      const diasAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0).getDate(); // Días del mes anterior
+      
+      // Calcular proyección para pedidos del mes
+      const pedidosMesPasadoProyectado = (kpisData.total_pedidos_mes_pasado || 0) / diasAnterior * diasActuales;
+      const porcentajeCambioProyectado = calcularPorcentajeCambioProyectado(
+        kpisData.total_pedidos_mes || 0, 
+        kpisData.total_pedidos_mes_pasado || 0, 
+        diasActuales, 
+        diasAnterior
+      );
+      
+      // Debug para pedidos del mes
+      console.log('=== DEBUG PEDIDOS DEL MES ===');
+      console.log('pedidosMes:', kpisData.total_pedidos_mes);
+      console.log('pedidosMesPasado:', kpisData.total_pedidos_mes_pasado);
+      console.log('diasActuales:', diasActuales);
+      console.log('diasAnterior:', diasAnterior);
+      console.log('pedidosMesPasadoProyectado:', pedidosMesPasadoProyectado);
+      console.log('Porcentaje de cambio proyectado:', porcentajeCambioProyectado);
+      console.log('Es positivo:', (kpisData.total_pedidos_mes || 0) >= pedidosMesPasadoProyectado);
+      console.log('=== FIN DEBUG PEDIDOS ===');
 
       // Actualizar estado con datos reales
       setData({
@@ -149,6 +196,7 @@ export default function Home() {
         bidones: Math.round((kpisData.litros_vendidos || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
         costos: kpisData.costos_reales || 0,
+        costosMesPasado: costosMesPasado,
         utilidades: kpisData.utilidad || 0,
         meta: progresoMeta,
         ticketPromedio: ticketPromedio,
@@ -160,8 +208,25 @@ export default function Home() {
         capacidadUtilizada: porcentajeCapacidad,
         litrosVendidos: litrosVendidos,
         capacidadTotal: capacidadTotal,
-        ventasHistoricas: ventasHistoricas
+        ventasHistoricas: ventasHistoricas,
+        bidonesMesPasado: bidonesMesPasado,
+        ivaMesPasado: kpisData.iva_mes_pasado || 0,
+        utilidadesMesPasado: kpisData.utilidad_mes_pasado || 0,
+        ticketPromedioMesPasado: kpisData.ticket_promedio_mes_pasado || 0,
+        clientesActivosMesPasado: kpisData.clientes_activos_mes_pasado || 0,
+        clientesInactivosMesPasado: kpisData.clientes_inactivos_mes_pasado || 0,
+        porcentajeCambioProyectado: porcentajeCambioProyectado,
+        esPositivoProyectado: (kpisData.total_pedidos_mes || 0) >= pedidosMesPasadoProyectado
       });
+
+      // Log de depuración para costos
+      console.log('=== DEBUG COSTOS ===');
+      console.log('kpisData.costos_reales:', kpisData.costos_reales);
+      console.log('kpisData.litros_vendidos_mes_pasado:', kpisData.litros_vendidos_mes_pasado);
+      console.log('costosMesPasado calculado:', costosMesPasado);
+      console.log('Porcentaje de cambio calculado:', calcularPorcentajeCambio(data.costos, costosMesPasado));
+      console.log('Es positivo:', data.costos <= costosMesPasado);
+      console.log('=== FIN DEBUG COSTOS ===');
 
     } catch (err) {
       console.error('Error obteniendo datos:', err);
@@ -234,19 +299,8 @@ export default function Home() {
   const [cardPositions, setCardPositions] = useState(initialPositions);
   const [cardSizes, setCardSizes] = useState(initialSizes);
 
-  const handleCardMove = (id, position) => {
-    setCardPositions(prev => ({
-      ...prev,
-      [id]: position
-    }));
-  };
-
-  const handleCardResize = (id, size) => {
-    setCardSizes(prev => ({
-      ...prev,
-      [id]: size
-    }));
-  };
+  // Las funciones de drag y resize se han eliminado para mejorar la calidad visual
+  // Las posiciones y tamaños se mantienen fijos en sus valores actuales
 
   const resetLayout = () => {
     setCardPositions(initialPositions);
@@ -287,73 +341,110 @@ export default function Home() {
 
   return (
     <>
-      {/* Header fijo */}
+      {/* Header fijo mejorado */}
       <Box sx={{ 
         position: 'fixed',
         top: 0,
-        left: { xs: 0, md: '240px' }, // Ajustar para el sidebar en desktop
+        left: { xs: 0, md: '240px' },
         right: 0,
         zIndex: 1000,
         bgcolor: 'background.default',
-        padding: 3,
+        padding: { xs: 2, md: 4 },
         borderBottom: `1px solid ${theme.palette.divider}`,
-        boxShadow: theme.shadows[1],
-        backdropFilter: 'blur(10px)',
-        height: 'auto'
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        backdropFilter: 'blur(20px)',
+        height: 'auto',
+        transition: 'all 0.3s ease'
       }}>
-        <Typography variant="h3" sx={{ 
-          fontWeight: 700, 
-          color: 'text.primary',
-          marginBottom: 1
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: 2
         }}>
-          Dashboard Aguas Ancud
-        </Typography>
-        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-          Panel de control y métricas en tiempo real
-        </Typography>
-        
-        <Button 
-          variant="outlined" 
-          onClick={resetLayout}
-          sx={{ 
-            mt: 2,
-            color: 'primary.main',
-            borderColor: 'primary.main',
-            '&:hover': {
-              borderColor: 'primary.dark',
-              backgroundColor: 'primary.main',
-              color: 'white'
-            }
-          }}
-        >
-          Resetear Layout
-        </Button>
+          <Box>
+            <Typography variant="h3" sx={{ 
+              fontWeight: 800, 
+              color: 'text.primary',
+              marginBottom: 0.5,
+              fontSize: { xs: '1.75rem', md: '2.5rem' },
+              lineHeight: 1.2,
+              letterSpacing: '-0.02em'
+            }}>
+              Dashboard Aguas Ancud
+            </Typography>
+            <Typography variant="body1" sx={{ 
+              color: 'text.secondary',
+              fontSize: '1rem',
+              fontWeight: 400,
+              lineHeight: 1.5
+            }}>
+              Panel de control y métricas en tiempo real
+            </Typography>
+          </Box>
+          
+          <Button 
+            variant="outlined" 
+            onClick={resetLayout}
+            sx={{ 
+              mt: { xs: 1, md: 0 },
+              color: 'primary.main',
+              borderColor: 'primary.main',
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              textTransform: 'none',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                borderColor: 'primary.dark',
+                backgroundColor: 'primary.main',
+                color: 'white',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }
+            }}
+          >
+            Resetear Layout
+          </Button>
+        </Box>
       </Box>
 
-      {/* Contenedor principal con padding-top para el header */}
+      {/* Contenedor principal mejorado */}
       <Box sx={{ 
         minHeight: '100vh',
         bgcolor: 'background.default',
-        padding: 3,
-        paddingTop: '200px', // Espacio para el header fijo
+        padding: { xs: 2, md: 4 },
+        paddingTop: '220px', // Espacio para el header fijo mejorado
         position: 'relative',
         overflow: 'auto',
-        height: '100vh' // Forzar altura completa
+        height: '100vh',
+        background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%)'
+          : 'linear-gradient(135deg, rgba(0,0,0,0.01) 0%, rgba(0,0,0,0.005) 100%)'
       }}>
         {/* Contenido principal */}
         <Box sx={{ 
           position: 'relative',
-          minHeight: 'calc(100vh - 200px)',
+          minHeight: 'calc(100vh - 220px)',
           width: '100%',
-          paddingBottom: '200px' // Espacio adicional al final
+          paddingBottom: '200px',
+          maxWidth: '100%',
+          margin: '0 auto'
         }}>
           {/* Cards principales */}
-          <DraggableCard
-            id="ventasTotales"
-            position={cardPositions.ventasTotales}
-            size={cardSizes.ventasTotales}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Ventas Totales Históricas */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.ventasTotales.x,
+              top: cardPositions.ventasTotales.y,
+              width: cardSizes.ventasTotales.width,
+              height: cardSizes.ventasTotales.height,
+              zIndex: 1
+            }}
           >
             <VentasCard 
               title="Ventas Totales Históricas"
@@ -362,112 +453,144 @@ export default function Home() {
               percentageChange={calcularPorcentajeCambio(data.ventas, data.ventasMesPasado)}
               isPositive={data.ventas >= data.ventasMesPasado}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="ventasMensuales"
-            position={cardPositions.ventasMensuales}
-            size={cardSizes.ventasMensuales}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Ventas Mensuales */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.ventasMensuales.x,
+              top: cardPositions.ventasMensuales.y,
+              width: cardSizes.ventasMensuales.width,
+              height: cardSizes.ventasMensuales.height,
+              zIndex: 1
+            }}
           >
             <VentasMensualesCard 
               value={data.ventasMensuales}
               percentageChange={calcularPorcentajeCambio(data.ventasMensuales, data.ventasMesPasado)}
               isPositive={data.ventasMensuales >= data.ventasMesPasado}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="ventasSemanales"
-            position={cardPositions.ventasSemanales}
-            size={cardSizes.ventasSemanales}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Ventas Semanales */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.ventasSemanales.x,
+              top: cardPositions.ventasSemanales.y,
+              width: cardSizes.ventasSemanales.width,
+              height: cardSizes.ventasSemanales.height,
+              zIndex: 1
+            }}
           >
             <VentasSemanalesCard 
               value={data.ventasSemanales}
               percentageChange={calcularPorcentajeCambio(data.ventasSemanales, data.ventasMesPasado / 4)}
               isPositive={data.ventasSemanales >= data.ventasMesPasado / 4}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="ventasDiarias"
-            position={cardPositions.ventasDiarias}
-            size={cardSizes.ventasDiarias}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Ventas Diarias */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.ventasDiarias.x,
+              top: cardPositions.ventasDiarias.y,
+              width: cardSizes.ventasDiarias.width,
+              height: cardSizes.ventasDiarias.height,
+              zIndex: 1
+            }}
           >
             <VentasDiariasCard 
               value={data.ventasDiarias}
               percentageChange={calcularPorcentajeCambio(data.ventasDiarias, data.ventasMesPasado / 30)}
               isPositive={data.ventasDiarias >= data.ventasMesPasado / 30}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="bidones"
-            position={cardPositions.bidones}
-            size={cardSizes.bidones}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Bidones */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.bidones.x,
+              top: cardPositions.bidones.y,
+              width: cardSizes.bidones.width,
+              height: cardSizes.bidones.height,
+              zIndex: 1
+            }}
           >
             <BidonesCard 
               value={data.bidones}
-              percentageChange={calcularPorcentajeCambio(data.bidones, Math.round(data.litrosVendidos / 20))}
-              isPositive={data.bidones >= Math.round(data.litrosVendidos / 20)}
+              percentageChange={calcularPorcentajeCambio(data.bidones, data.bidonesMesPasado || 0)}
+              isPositive={data.bidones >= (data.bidonesMesPasado || 0)}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="iva"
-            position={cardPositions.iva}
-            size={cardSizes.iva}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* IVA */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.iva.x,
+              top: cardPositions.iva.y,
+              width: cardSizes.iva.width,
+              height: cardSizes.iva.height,
+              zIndex: 1
+            }}
           >
             <IvaCard 
               value={data.iva}
-              percentageChange={calcularPorcentajeCambio(data.iva, data.ventasMesPasado * 0.19)}
-              isPositive={data.iva >= data.ventasMesPasado * 0.19}
+              percentageChange={calcularPorcentajeCambio(data.iva, data.ivaMesPasado || 0)}
+              isPositive={data.iva >= (data.ivaMesPasado || 0)}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="costos"
-            position={cardPositions.costos}
-            size={cardSizes.costos}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Costos */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.costos.x,
+              top: cardPositions.costos.y,
+              width: cardSizes.costos.width,
+              height: cardSizes.costos.height,
+              zIndex: 1
+            }}
           >
             <CostosCard 
               value={data.costos}
-              percentageChange={calcularPorcentajeCambio(data.costos, data.ventasMesPasado * 0.7)}
-              isPositive={data.costos <= data.ventasMesPasado * 0.7}
+              percentageChange={calcularPorcentajeCambio(data.costos, data.costosMesPasado || 0)}
+              isPositive={data.costos <= (data.costosMesPasado || 0)}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="utilidades"
-            position={cardPositions.utilidades}
-            size={cardSizes.utilidades}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Utilidades */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.utilidades.x,
+              top: cardPositions.utilidades.y,
+              width: cardSizes.utilidades.width,
+              height: cardSizes.utilidades.height,
+              zIndex: 1
+            }}
           >
             <UtilidadesCard 
               value={data.utilidades}
-              percentageChange={calcularPorcentajeCambio(data.utilidades, data.ventasMesPasado * 0.3)}
-              isPositive={data.utilidades >= data.ventasMesPasado * 0.3}
+              percentageChange={calcularPorcentajeCambio(data.utilidades, data.utilidadesMesPasado || 0)}
+              isPositive={data.utilidades >= (data.utilidadesMesPasado || 0)}
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="kpiMeta"
-            position={cardPositions.kpiMeta}
-            size={cardSizes.kpiMeta}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* KPI Meta */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.kpiMeta.x,
+              top: cardPositions.kpiMeta.y,
+              width: cardSizes.kpiMeta.width,
+              height: cardSizes.kpiMeta.height,
+              zIndex: 1
+            }}
           >
             <KpiMetaCard 
               value={data.meta}
@@ -475,14 +598,18 @@ export default function Home() {
               subtitle="Objetivo Mensual"
               description="Progreso respecto a la meta establecida para este mes."
             />
-          </DraggableCard>
+          </Box>
 
-          <DraggableCard
-            id="capacidad"
-            position={cardPositions.capacidad}
-            size={cardSizes.capacidad}
-            onMove={handleCardMove}
-            onResize={handleCardResize}
+          {/* Capacidad */}
+          <Box
+            sx={{ 
+              position: 'absolute',
+              left: cardPositions.capacidad.x,
+              top: cardPositions.capacidad.y,
+              width: cardSizes.capacidad.width,
+              height: cardSizes.capacidad.height,
+              zIndex: 1
+            }}
           >
             <CapacidadCard 
               value={data.capacidadUtilizada}
@@ -493,7 +620,7 @@ export default function Home() {
               litrosVendidos={data.litrosVendidos}
               capacidadTotal={data.capacidadTotal}
             />
-          </DraggableCard>
+          </Box>
 
           {/* Cards compactos - FIJOS */}
           <Box
@@ -523,32 +650,32 @@ export default function Home() {
                 value={data.ticketPromedio}
                 subtitle="Por pedido"
                 icon="💰"
-                trend="+5.2%"
-                isPositive={true}
+                trend={`${calcularPorcentajeCambio(data.ticketPromedio, data.ticketPromedioMesPasado || 0).toFixed(1)}%`}
+                isPositive={data.ticketPromedio >= (data.ticketPromedioMesPasado || 0)}
               />
-              <KpiCard 
+              <FinancialKpiCard 
                 title="Clientes Activos"
                 value={data.clientesActivos}
                 subtitle="Este mes"
                 icon="👥"
-                trend="+3.1%"
-                isPositive={true}
+                trend={`${calcularPorcentajeCambio(data.clientesActivos, data.clientesActivosMesPasado || 0).toFixed(1)}%`}
+                isPositive={data.clientesActivos >= (data.clientesActivosMesPasado || 0)}
               />
-              <KpiCard 
+              <FinancialKpiCard 
                 title="Pedidos del Mes"
                 value={data.pedidosMes}
                 subtitle="Total"
                 icon="📦"
-                trend="+8.7%"
-                isPositive={true}
+                trend={`${data.porcentajeCambioProyectado.toFixed(1)}%`}
+                isPositive={data.esPositivoProyectado}
               />
-              <KpiCard 
+              <FinancialKpiCard 
                 title="Clientes Inactivos"
                 value={data.clientesInactivos}
                 subtitle="Este mes"
                 icon="⏸️"
-                trend="-2.3%"
-                isPositive={false}
+                trend={`${calcularPorcentajeCambio(data.clientesInactivos, data.clientesInactivosMesPasado || 0).toFixed(1)}%`}
+                isPositive={data.clientesInactivos <= (data.clientesInactivosMesPasado || 0)}
               />
             </Box>
           </Box>

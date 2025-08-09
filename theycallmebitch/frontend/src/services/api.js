@@ -2,7 +2,7 @@
 // Funciones para consumir la API del backend (FastAPI)
 
 // URL dinámica que funciona en desarrollo y producción
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = 'http://localhost:8001';
 
 // Log para debugging
 console.log('API_URL configurada:', API_URL);
@@ -212,13 +212,12 @@ export const getVentasDiarias = async () => {
     console.error('Error obteniendo ventas diarias:', error);
     return {
       ventas_hoy: 0,
-      pedidos_hoy: 0,
-      bidones_hoy: 0,
-      fecha: new Date().toLocaleDateString('es-CL'),
-      ventas_ayer: 0,
-      pedidos_ayer: 0,
+      ventas_mismo_dia_mes_anterior: 0,
       porcentaje_cambio: 0,
-      es_positivo: true
+      es_positivo: true,
+      fecha_comparacion: '',
+      tendencia_7_dias: [],
+      tipo_comparacion: 'mensual'
     };
   }
 };
@@ -348,4 +347,6 @@ export const getAnalisisRentabilidad = async () => {
     console.error('Error obteniendo análisis de rentabilidad:', error);
     return { error: 'Error obteniendo análisis' };
   }
-}; 
+};
+
+ 

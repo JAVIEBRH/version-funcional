@@ -31,7 +31,8 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  CircularProgress
+  CircularProgress,
+  useTheme
 } from '@mui/material';
 import { 
   TrendingUp, 
@@ -80,6 +81,7 @@ import PrediccionCumplimientoCard from '../components/PrediccionCumplimientoCard
 import './Predictor.css';
 
 export default function Predictor() {
+  const theme = useTheme();
   const [prediccion, setPrediccion] = useState({
     fecha: '',
     tipoCliente: 'residencial'
@@ -749,7 +751,7 @@ export default function Predictor() {
       minHeight: '100vh',
       overflow: 'auto',
       height: '100vh',
-      bgcolor: '#f8fafc'
+      bgcolor: 'background.default'
     }}>
       {/* Header Moderno */}
       <Box sx={{ mb: 4 }}>
@@ -759,7 +761,7 @@ export default function Predictor() {
           </Avatar>
           <Box>
         <Typography variant="h4" component="h1" sx={{ 
-          color: '#1e293b', 
+          color: 'text.primary', 
           fontWeight: 700, 
           display: 'flex',
           alignItems: 'center',
@@ -778,7 +780,7 @@ export default function Predictor() {
               />
         </Typography>
         <Typography variant="body1" sx={{ 
-              color: '#64748b',
+              color: 'text.secondary',
               mt: 0.5,
               display: 'flex',
               alignItems: 'center',
@@ -791,7 +793,7 @@ export default function Predictor() {
         </Box>
 
         {/* Selector de Modo Simplificado */}
-        <Card sx={{ mb: 3, bgcolor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <Card sx={{ mb: 3, bgcolor: 'background.paper', boxShadow: theme.shadows[1], border: `1px solid ${theme.palette.divider}` }}>
           <CardContent sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
@@ -800,9 +802,9 @@ export default function Predictor() {
                 onClick={() => setModoPrediccion('inteligente')}
                 sx={{
                   bgcolor: modoPrediccion === 'inteligente' ? '#8b5cf6' : 'transparent',
-                  color: modoPrediccion === 'inteligente' ? 'white' : '#64748b',
+                  color: modoPrediccion === 'inteligente' ? 'white' : 'text.secondary',
                   '&:hover': {
-                    bgcolor: modoPrediccion === 'inteligente' ? '#7c3aed' : '#f1f5f9'
+                    bgcolor: modoPrediccion === 'inteligente' ? '#7c3aed' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9'
                   }
                 }}
               >
@@ -814,9 +816,9 @@ export default function Predictor() {
                 onClick={() => setModoPrediccion('clasico')}
                 sx={{
                   bgcolor: modoPrediccion === 'clasico' ? '#3b82f6' : 'transparent',
-                  color: modoPrediccion === 'clasico' ? 'white' : '#64748b',
+                  color: modoPrediccion === 'clasico' ? 'white' : 'text.secondary',
                   '&:hover': {
-                    bgcolor: modoPrediccion === 'clasico' ? '#2563eb' : '#f1f5f9'
+                    bgcolor: modoPrediccion === 'clasico' ? '#2563eb' : theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9'
                   }
                 }}
               >
@@ -851,14 +853,14 @@ export default function Predictor() {
         <Grid item xs={12} md={4}>
           <Card sx={{ 
             height: 'fit-content', 
-            bgcolor: '#fff',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-            border: '1px solid #e2e8f0'
+            bgcolor: 'background.paper',
+            boxShadow: theme.shadows[1],
+            border: `1px solid ${theme.palette.divider}`
           }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
                 {getIconoModo()}
-                <Typography variant="h6" sx={{ color: '#1e293b', fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ color: 'text.primary', fontWeight: 600 }}>
                 Parámetros de Predicción
               </Typography>
               </Box>
@@ -875,8 +877,8 @@ export default function Predictor() {
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 2,
-                      '& fieldset': { borderColor: '#e2e8f0' },
-                      '&:hover fieldset': { borderColor: '#cbd5e1' },
+                      '& fieldset': { borderColor: theme.palette.divider },
+                      '&:hover fieldset': { borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1' },
                       '&.Mui-focused fieldset': { borderColor: '#3b82f6' }
                     }
                   }}
@@ -891,8 +893,8 @@ export default function Predictor() {
                       label="Tipo de cliente"
                     sx={{
                       borderRadius: 2,
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#e2e8f0' },
-                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#cbd5e1' },
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.divider },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1' },
                       '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#3b82f6' }
                     }}
                   >
@@ -955,21 +957,21 @@ export default function Predictor() {
         {/* Resultados de Predicción Inteligente */}
         <Grid item xs={12} md={8}>
           <Card sx={{ 
-            bgcolor: '#fff',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-            border: '1px solid #e2e8f0'
+            bgcolor: 'background.paper',
+            boxShadow: theme.shadows[1],
+            border: `1px solid ${theme.palette.divider}`
           }}>
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
                 <Insights sx={{ color: '#3b82f6' }} />
-                <Typography variant="h6" sx={{ color: '#1e293b', fontWeight: 600 }}>
+                <Typography variant="h6" sx={{ color: 'text.primary', fontWeight: 600 }}>
                   Resultados de Predicción Inteligente
               </Typography>
               </Box>
               
               {loading && (
                 <Box sx={{ mb: 3 }}>
-                  <Typography variant="body2" sx={{ mb: 1, color: '#64748b' }}>
+                  <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
                     Analizando patrones históricos con IA...
                   </Typography>
                   <LinearProgress sx={{ borderRadius: 1 }} />
@@ -1306,15 +1308,16 @@ export default function Predictor() {
                   flexDirection: 'column', 
                   alignItems: 'center', 
                   py: 6,
-                  color: '#64748b'
+                  color: 'text.secondary'
                 }}>
-                  <AutoAwesome sx={{ fontSize: 64, mb: 2, color: '#cbd5e1' }} />
-                  <Typography variant="h6" sx={{ mb: 1, textAlign: 'center' }}>
+                  <AutoAwesome sx={{ fontSize: 64, mb: 2, color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1' }} />
+                  <Typography variant="h6" sx={{ mb: 1, textAlign: 'center', color: 'text.primary' }}>
                     Predictor Inteligente
                   </Typography>
                   <Typography variant="body1" sx={{ 
                     textAlign: 'center',
-                    maxWidth: 400
+                    maxWidth: 400,
+                    color: 'text.secondary'
                   }}>
                     Completa los parámetros y genera una predicción inteligente con intervalos de confianza y detección de anomalías
                   </Typography>

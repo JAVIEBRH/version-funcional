@@ -143,10 +143,28 @@
       "error_porcentual": null,
       "efectividad_real": null,
       "verificada": false
+    },
+    {
+      "fecha": "2025-07-28",
+      "tipo_cliente": "recurrente",
+      "prediccion": 6,
+      "factores": {
+        "base": 6.0,
+        "factor_tipo": 1.2,
+        "factor_finde": 1.0,
+        "factor_estacional": 0.9,
+        "dia_semana": 0
+      },
+      "efectividad_estimada": 85,
+      "fecha_registro": "2025-07-27T13:47:34.063578",
+      "pedidos_reales": null,
+      "error_porcentual": null,
+      "efectividad_real": null,
+      "verificada": false
     }
   ],
   "metricas": {
-    "total_predicciones": 8,
+    "total_predicciones": 9,
     "predicciones_verificadas": 3,
     "error_promedio": 31.7,
     "efectividad_promedio": 58.3,

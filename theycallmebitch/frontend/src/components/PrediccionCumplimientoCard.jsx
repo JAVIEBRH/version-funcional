@@ -1,7 +1,6 @@
 import React from "react";
 import { Card, CardContent, Typography, Box, LinearProgress } from "@mui/material";
 import { TrendingUp, TrendingDown, CheckCircle, Warning } from "@mui/icons-material";
-import "./KpiCard.css";
 
 export default function PrediccionCumplimientoCard({
   prediccionEsperada,
@@ -35,47 +34,93 @@ export default function PrediccionCumplimientoCard({
   const diferenciaTexto = diferencia > 0 ? `+${diferencia}` : diferencia.toString();
 
   return (
-    <div className="kpi-card prediccion-card">
-      <div className="kpi-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span className="kpi-card-title">Cumplimiento Predicción</span>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {React.cloneElement(icon, { sx: { color: color, fontSize: 20 } })}
-          <span style={{ 
-            color: color, 
-            fontSize: '0.875rem', 
-            fontWeight: 600 
-          }}>
-            {estado}
-          </span>
+    <Card
+      sx={{
+        background: 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
+        borderRadius: 3,
+        border: '1px solid rgba(147, 112, 219, 0.1)',
+        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
+        transition: 'all 0.3s ease',
+        cursor: 'pointer',
+        '&:hover': {
+          transform: 'translateY(-1px)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+        }
+      }}
+    >
+      <CardContent sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              fontWeight: 600,
+              fontSize: '0.875rem'
+            }}
+          >
+            Cumplimiento Predicción
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {React.cloneElement(icon, { sx: { color: color, fontSize: 20 } })}
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: color, 
+                fontSize: '0.875rem', 
+                fontWeight: 600 
+              }}
+            >
+              {estado}
+            </Typography>
+          </Box>
         </Box>
-      </div>
-      
-      <div className="kpi-card-value" style={{ color: color }}>
-        {porcentajeCumplimiento}%
-      </div>
-      
-      <div className="kpi-card-sub">
-        {pedidosReales} / {prediccionEsperada} pedidos
-      </div>
-
-      <Box sx={{ mt: 2, mb: 1 }}>
-        <LinearProgress 
-          variant="determinate" 
-          value={Math.min(porcentajeCumplimiento, 150)} 
+        
+        <Typography 
+          variant="h4" 
           sx={{ 
-            height: 8, 
-            borderRadius: 4,
-            backgroundColor: '#e5e7eb',
-            '& .MuiLinearProgress-bar': {
-              backgroundColor: color,
-              borderRadius: 4
-            }
-          }} 
-        />
-      </Box>
+            color: color,
+            fontWeight: 800,
+            mb: 1,
+            fontSize: '2rem'
+          }}
+        >
+          {porcentajeCumplimiento}%
+        </Typography>
+        
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            color: 'text.secondary',
+            mb: 2,
+            fontSize: '0.875rem'
+          }}
+        >
+          {pedidosReales} / {prediccionEsperada} pedidos
+        </Typography>
 
-      <div className="kpi-card-desc">
-        <span>
+        <Box sx={{ mb: 2 }}>
+          <LinearProgress 
+            variant="determinate" 
+            value={Math.min(porcentajeCumplimiento, 150)} 
+            sx={{ 
+              height: 8, 
+              borderRadius: 4,
+              backgroundColor: '#e5e7eb',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: color,
+                borderRadius: 4
+              }
+            }} 
+          />
+        </Box>
+
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            color: 'text.secondary',
+            fontSize: '0.75rem',
+            lineHeight: 1.4
+          }}
+        >
           {fecha && zona && tipoCliente ? (
             <>
               {fecha} - {zona}<br/>
@@ -85,14 +130,20 @@ export default function PrediccionCumplimientoCard({
             <>
               Predicción vs Real<br/>
               {diferencia !== 0 && (
-                <span style={{ color: diferencia > 0 ? '#10b981' : '#ef4444' }}>
+                <Typography 
+                  component="span" 
+                  sx={{ 
+                    color: diferencia > 0 ? '#10b981' : '#ef4444',
+                    fontSize: '0.75rem'
+                  }}
+                >
                   {diferenciaTexto} pedidos
-                </span>
+                </Typography>
               )}
             </>
           )}
-        </span>
-      </div>
-    </div>
+        </Typography>
+      </CardContent>
+    </Card>
   );
 } 

@@ -48,11 +48,11 @@ const InventarioCard = () => {
 
   const getEstadoColor = (estado) => {
     switch (estado) {
-      case 'critico': return '#dc2626';
-      case 'bajo': return '#f59e0b';
-      case 'normal': return '#059669';
-      case 'alto': return '#3b82f6';
-      default: return '#6b7280';
+      case 'critico': return theme.palette.custom.critical;
+      case 'bajo': return theme.palette.custom.warning;
+      case 'normal': return theme.palette.custom.success;
+      case 'alto': return theme.palette.custom.info;
+      default: return theme.palette.custom.neutral;
     }
   };
 
@@ -68,10 +68,10 @@ const InventarioCard = () => {
 
   const getPrioridadColor = (prioridad) => {
     switch (prioridad) {
-      case 'alta': return '#dc2626';
-      case 'media': return '#f59e0b';
-      case 'baja': return '#059669';
-      default: return '#6b7280';
+      case 'alta': return theme.palette.custom.critical;
+      case 'media': return theme.palette.custom.warning;
+      case 'baja': return theme.palette.custom.success;
+      default: return theme.palette.custom.neutral;
     }
   };
 
@@ -116,7 +116,7 @@ const InventarioCard = () => {
           }} />
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
             Gestión de Inventario
-            {loading && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#9370db' }}>🔄</span>}
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
           </Typography>
         </Box>
         <Chip 

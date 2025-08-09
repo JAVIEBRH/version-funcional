@@ -1,92 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
-import { getPedidos } from '../services/api';
+import { Box, Typography, Chip, Tooltip } from '@mui/material';
+import { getVentasDiarias } from '../services/api';
 
 const VentasDiariasCard = ({ 
   title = 'Ventas Diarias', 
   value = 0, 
-  subtitle = 'Hoy',
+  subtitle = 'Hoy vs Mismo día mes anterior',
   percentageChange = 0,
   isPositive = true 
 }) => {
   const theme = useTheme();
   const [ventasData, setVentasData] = useState({
     ventas_hoy: value,
+    ventas_mismo_dia_mes_anterior: 0,
     porcentaje_cambio: percentageChange,
     es_positivo: isPositive,
-    fecha: subtitle
+    fecha_comparacion: '',
+    tendencia_7_dias: [],
+    tipo_comparacion: 'mensual'
   });
   const [loading, setLoading] = useState(false);
   
-  const calcularVentasDiarias = async () => {
+  const fetchVentasDiarias = async () => {
     try {
       setLoading(true);
-      const pedidos = await getPedidos();
-      
-      // Filtrar pedidos de hoy
-      const hoy = new Date();
-      const fechaHoy = hoy.toLocaleDateString('es-CL', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
-      });
-      
-      const pedidosHoy = pedidos.filter(pedido => {
-        return pedido.fecha === fechaHoy;
-      });
-      
-      const ventasHoy = pedidosHoy.reduce((total, pedido) => {
-        return total + (parseInt(pedido.precio) || 0);
-      }, 0);
-      
-      // Filtrar pedidos de ayer
-      const ayer = new Date(hoy);
-      ayer.setDate(hoy.getDate() - 1);
-      const fechaAyer = ayer.toLocaleDateString('es-CL', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
-      });
-      
-      const pedidosAyer = pedidos.filter(pedido => {
-        return pedido.fecha === fechaAyer;
-      });
-      
-      const ventasAyer = pedidosAyer.reduce((total, pedido) => {
-        return total + (parseInt(pedido.precio) || 0);
-      }, 0);
-      
-      // Calcular porcentaje de cambio
-      let porcentajeCambio = 0;
-      let esPositivo = true;
-      
-      if (ventasAyer > 0) {
-        porcentajeCambio = ((ventasHoy - ventasAyer) / ventasAyer) * 100;
-        esPositivo = ventasHoy >= ventasAyer;
-      } else if (ventasHoy > 0) {
-        porcentajeCambio = 100;
-        esPositivo = true;
-      }
-      
-      setVentasData({
-        ventas_hoy: ventasHoy,
-        porcentaje_cambio: porcentajeCambio,
-        es_positivo: esPositivo,
-        fecha: fechaHoy
-      });
-      
+      const data = await getVentasDiarias();
+      setVentasData(data);
     } catch (error) {
-      console.error('Error calculando ventas diarias:', error);
+      console.error('Error obteniendo ventas diarias:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // Actualizar datos cuando cambien los props
   useEffect(() => {
-    calcularVentasDiarias();
+    setVentasData(prev => ({
+      ...prev,
+      ventas_dia_actual: value,
+      porcentaje_cambio: percentageChange,
+      es_positivo: isPositive
+    }));
+  }, [value, percentageChange, isPositive]);
+
+  useEffect(() => {
+    fetchVentasDiarias();
     
     // Actualizar cada 5 minutos
-    const interval = setInterval(calcularVentasDiarias, 5 * 60 * 1000);
+    const interval = setInterval(fetchVentasDiarias, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
   }, []);
@@ -101,91 +63,160 @@ const VentasDiariasCard = ({
     }
   };
 
+  // Generar puntos del gráfico de 7 días
+  const generarPuntosGrafico = () => {
+    if (!ventasData.tendencia_7_dias || ventasData.tendencia_7_dias.length === 0) {
+      return "M0 30 Q20 20 40 25 T80 15 T120 20 T160 10 T200 15";
+    }
+    
+    const puntos = ventasData.tendencia_7_dias.map((dia, index) => {
+      const x = (index / 6) * 200; // 200 es el ancho del SVG
+      const maxVentas = Math.max(...ventasData.tendencia_7_dias.map(d => d.ventas));
+      const y = maxVentas > 0 ? 40 - (dia.ventas / maxVentas) * 30 : 30;
+      return `${x} ${y}`;
+    });
+    
+    return `M${puntos.join(' L')}`;
+  };
+
+  const tooltipText = `Comparación mensual:
+Hoy: ${formatValue(ventasData.ventas_hoy)}
+${ventasData.fecha_comparacion}: ${formatValue(ventasData.ventas_mismo_dia_mes_anterior)}
+Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
+
   return (
-    <div style={{
-      background: theme.palette.mode === 'dark' 
-        ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-        : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-      borderRadius: 16,
-      padding: 24,
-      color: theme.palette.text.primary,
-      boxShadow: theme.palette.mode === 'dark' 
-        ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-        : '0 4px 20px rgba(0, 0, 0, 0.08)',
-      transition: 'all 0.3s ease',
-      cursor: 'pointer',
-      minHeight: 180,
-      border: `1px solid ${theme.palette.mode === 'dark' 
-        ? 'rgba(147, 112, 219, 0.2)' 
-        : 'rgba(147, 112, 219, 0.1)'}`,
-      position: 'relative',
-      overflow: 'hidden'
-    }}
-    onClick={calcularVentasDiarias}
+    <Box
+      sx={{
+        background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
+        borderRadius: 3,
+        padding: 3,
+        color: theme.palette.text.primary,
+        boxShadow: theme.palette.mode === 'dark' 
+          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
+          : '0 4px 20px rgba(0, 0, 0, 0.08)',
+        transition: 'all 0.3s ease',
+        cursor: 'pointer',
+        minHeight: 180,
+        border: `1px solid ${theme.palette.mode === 'dark' 
+          ? 'rgba(147, 112, 219, 0.2)' 
+          : 'rgba(147, 112, 219, 0.1)'}`,
+        position: 'relative',
+        overflow: 'hidden',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: theme.palette.mode === 'dark' 
+            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
+            : '0 8px 30px rgba(0, 0, 0, 0.12)'
+        }
+      }}
+      onClick={fetchVentasDiarias}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ 
-            fontSize: '1rem', 
-            fontWeight: 700, 
-            color: theme.palette.text.primary, 
-            marginBottom: 12,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em'
-          }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+        <Box sx={{ flex: 1 }}>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              fontWeight: 700, 
+              color: theme.palette.text.primary, 
+              mb: 1.5,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              fontSize: '1rem', // Estandarizado a 1rem
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1',
+              fontDisplay: 'swap'
+            }}
+          >
             {title}
-            {loading && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#9370db' }}>🔄</span>}
-          </div>
-          <div style={{ 
-            fontSize: '2.5rem', 
-            fontWeight: 800, 
-            marginBottom: 8,
-            color: theme.palette.text.primary,
-            fontFamily: '"Roboto", "Helvetica Neue", Arial, sans-serif',
-            lineHeight: 1.1
-          }}>
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+          </Typography>
+          <Typography 
+            variant="h3" 
+            sx={{ 
+              fontWeight: 800, 
+              mb: 1,
+              color: theme.palette.text.primary,
+              lineHeight: 1.1,
+              fontSize: '2.5rem', // Estandarizado a 2.5rem
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1, "tnum" 1',
+              fontDisplay: 'swap'
+            }}
+          >
             {formatValue(ventasData.ventas_hoy)}
-          </div>
-          <div style={{ 
-            fontSize: '0.875rem', 
-            color: theme.palette.text.secondary,
-            fontWeight: 500
-          }}>
-            {ventasData.fecha}
-          </div>
-        </div>
-        <div style={{
-          background: theme.palette.mode === 'dark' 
-            ? 'rgba(147, 112, 219, 0.2)' 
-            : 'rgba(147, 112, 219, 0.1)',
-          borderRadius: 12,
-          padding: '8px 12px',
-          fontSize: '0.875rem',
-          color: ventasData.es_positivo ? '#059669' : '#dc2626',
-          fontWeight: 600,
-          border: `1px solid ${ventasData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`
-        }}>
-          {ventasData.es_positivo ? '+' : ''}{ventasData.porcentaje_cambio.toFixed(1)}%
-        </div>
-      </div>
+          </Typography>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.8)' : theme.palette.text.secondary,
+              fontWeight: 500,
+              fontSize: '0.9rem', // Estandarizado a 0.9rem
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1',
+              fontDisplay: 'swap'
+            }}
+          >
+            {subtitle}
+          </Typography>
+        </Box>
+        <Tooltip 
+          title={tooltipText}
+          placement="top"
+          arrow
+        >
+          <Chip
+            label={`${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`}
+            sx={{
+              background: theme.palette.mode === 'dark' 
+                ? 'rgba(147, 112, 219, 0.2)' 
+                : 'rgba(147, 112, 219, 0.1)',
+              color: ventasData.es_positivo ? '#059669' : '#dc2626',
+              fontWeight: 600,
+              border: `1px solid ${ventasData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
+              fontSize: '0.9rem', // Estandarizado a 0.9rem
+              height: 'auto',
+              cursor: 'help',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1',
+              fontDisplay: 'swap',
+              '& .MuiChip-label': {
+                padding: '8px 12px',
+                WebkitFontSmoothing: 'antialiased',
+                MozOsxFontSmoothing: 'grayscale',
+                textRendering: 'optimizeLegibility'
+              }
+            }}
+          />
+        </Tooltip>
+      </Box>
       
-      {/* Gráfico de tendencia simplificado */}
-      <div style={{ 
+      {/* Gráfico real de últimos 7 días */}
+      <Box sx={{ 
         width: '100%', 
         height: 40, 
-        marginTop: 16,
+        mt: 2,
         position: 'relative'
       }}>
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
-            d="M0 35 Q20 25 40 30 T80 20 T120 25 T160 15 T200 20"
+            d={generarPuntosGrafico()}
             stroke="#9370db"
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
-            d="M0 35 Q20 25 40 30 T80 20 T120 25 T160 15 T200 20 L200 40 L0 40 Z"
+            d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
             fill="url(#gradient)"
             opacity="0.3"
           />
@@ -196,8 +227,37 @@ const VentasDiariasCard = ({
             </linearGradient>
           </defs>
         </svg>
-      </div>
-    </div>
+        
+        {/* Etiquetas de días */}
+        {ventasData.tendencia_7_dias && ventasData.tendencia_7_dias.length > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            mt: 0.5,
+            px: 1
+          }}>
+            {ventasData.tendencia_7_dias.map((dia, index) => (
+              <Typography 
+                key={index}
+                variant="caption" 
+                sx={{ 
+                  fontSize: '0.75rem', // Estandarizado a 0.75rem
+                  color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                  fontWeight: 500,
+                  WebkitFontSmoothing: 'antialiased',
+                  MozOsxFontSmoothing: 'grayscale',
+                  textRendering: 'optimizeLegibility',
+                  fontFeatureSettings: '"liga" 1, "kern" 1',
+                  fontDisplay: 'swap'
+                }}
+              >
+                {dia.dia}
+              </Typography>
+            ))}
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 };
 

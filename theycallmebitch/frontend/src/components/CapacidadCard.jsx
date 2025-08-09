@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '@mui/material/styles';
+import { Typography } from '@mui/material';
 
 const CircularProgressBar = ({ value, size = 140, stroke = 12, color = '#3b82f6', bgColor = '#e2e8f0', theme }) => {
   const radius = (size - stroke) / 2;
@@ -112,8 +113,8 @@ const CapacidadCard = ({
       <CircularProgressBar value={percentage} color={progressColor} theme={theme} />
       
               <div style={{ 
-          fontSize: '1rem', 
-          color: theme.palette.text.secondary, 
+          fontSize: '1.125rem', // Aumentado de 1rem
+          color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.8)' : theme.palette.text.secondary, 
           margin: '20px 0 12px 0', 
           textAlign: 'center', 
           fontWeight: 500,
@@ -146,8 +147,8 @@ const CapacidadCard = ({
       </div>
       
       <div style={{ 
-        fontSize: '0.875rem', 
-        color: theme.palette.text.secondary, 
+        fontSize: '0.95rem', // Aumentado de 0.875rem
+        color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : theme.palette.text.secondary, 
         marginTop: 12, 
         textAlign: 'center',
         lineHeight: 1.5,

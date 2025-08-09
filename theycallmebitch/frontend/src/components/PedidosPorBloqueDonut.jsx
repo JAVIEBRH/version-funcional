@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
+import { Typography, Box } from '@mui/material';
 import { getPedidosPorHorario } from '../services/api';
 
 const PedidosPorBloqueDonut = ({ 
   pedidosManana = 0, 
   pedidosTarde = 0,
-  title = 'Pedidos por Horario'
+  title = 'Distribución de Pedidos por Franja Horaria'
 }) => {
   const theme = useTheme();
   const [horarioData, setHorarioData] = useState({
@@ -45,248 +46,258 @@ const PedidosPorBloqueDonut = ({
   }, []);
   
   const total = horarioData.pedidos_manana + horarioData.pedidos_tarde;
-  const porcentajeManana = total > 0 ? horarioData.porcentaje_manana : 0;
-  const porcentajeTarde = total > 0 ? horarioData.porcentaje_tarde : 0;
+  const porcentajeManana = total > 0 ? (horarioData.pedidos_manana / total) * 100 : 0;
+  const porcentajeTarde = total > 0 ? (horarioData.pedidos_tarde / total) * 100 : 0;
   
   const radius = 60;
   const strokeWidth = 12;
   const circumference = 2 * Math.PI * radius;
   
+  // Calcular offsets para los segmentos
   const mananaOffset = circumference - (porcentajeManana / 100) * circumference;
   const tardeOffset = circumference - (porcentajeTarde / 100) * circumference;
 
   return (
-    <div style={{
-      background: theme.palette.mode === 'dark' 
-        ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-        : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-      borderRadius: 16,
-      boxShadow: theme.palette.mode === 'dark' 
-        ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-        : '0 4px 20px rgba(0, 0, 0, 0.08)',
-      padding: 28,
-      border: `1px solid ${theme.palette.mode === 'dark' 
-        ? 'rgba(147, 112, 219, 0.2)' 
-        : 'rgba(147, 112, 219, 0.1)'}`,
-      transition: 'all 0.3s ease',
-      position: 'relative',
-      overflow: 'hidden'
-    }}
-    onClick={fetchPedidosPorHorario}
+    <Box
+      sx={{
+        background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
+        borderRadius: 3,
+        boxShadow: theme.palette.mode === 'dark' 
+          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
+          : '0 4px 20px rgba(0, 0, 0, 0.08)',
+        padding: 3,
+        border: `1px solid ${theme.palette.mode === 'dark' 
+          ? 'rgba(147, 112, 219, 0.2)' 
+          : 'rgba(147, 112, 219, 0.1)'}`,
+        transition: 'all 0.3s ease',
+        position: 'relative',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: theme.palette.mode === 'dark' 
+            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
+            : '0 8px 30px rgba(0, 0, 0, 0.12)'
+        }
+      }}
+      onClick={fetchPedidosPorHorario}
     >
-      <div style={{ 
-        fontSize: '1.125rem', 
-        fontWeight: 700, 
-        color: theme.palette.text.primary, 
-        marginBottom: 20, 
-        textAlign: 'center',
-        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-        letterSpacing: '0.025em',
-        textTransform: 'uppercase',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
-      }}>
+      <Typography 
+        variant="h6" 
+        sx={{ 
+          fontWeight: 700, 
+          color: theme.palette.text.primary, 
+          mb: 2, 
+          textAlign: 'center',
+          textTransform: 'uppercase',
+          letterSpacing: '0.025em',
+          fontSize: '1rem'
+        }}
+      >
         {title}
-        {loading && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#9370db' }}>🔄</span>}
-      </div>
+        {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+      </Typography>
       
-      <div style={{ 
+      <Box sx={{ 
         display: 'flex', 
         justifyContent: 'center', 
         alignItems: 'center',
-        marginBottom: 20
+        mb: 2
       }}>
-        <svg width="140" height="140" style={{ position: 'relative' }}>
-          {/* Fondo del donut */}
-          <circle
-            cx="70"
-            cy="70"
-            r={radius}
-            stroke={theme.palette.mode === 'dark' ? '#374151' : '#e2e8f0'}
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-          
-          {/* Segmento de la mañana */}
-          <circle
-            cx="70"
-            cy="70"
-            r={radius}
-            stroke="#3b82f6"
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={mananaOffset}
-            strokeLinecap="round"
-            transform="rotate(-90 70 70)"
-            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-          />
-          
-          {/* Segmento de la tarde */}
-          <circle
-            cx="70"
-            cy="70"
-            r={radius}
-            stroke="#10b981"
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={tardeOffset}
-            strokeLinecap="round"
-            transform="rotate(-90 70 70)"
-            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-          />
+        <Box sx={{ position: 'relative', display: 'inline-block' }}>
+          <svg width="140" height="140" style={{ position: 'relative' }}>
+            {/* Fondo del donut */}
+            <circle
+              cx="70"
+              cy="70"
+              r={radius}
+              fill="none"
+              stroke="#e5e7eb"
+              strokeWidth={strokeWidth}
+            />
+            
+            {/* Segmento Mañana */}
+            <circle
+              cx="70"
+              cy="70"
+              r={radius}
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={mananaOffset}
+              strokeLinecap="round"
+              transform="rotate(-90 70 70)"
+              style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+            />
+            
+            {/* Segmento Tarde */}
+            <circle
+              cx="70"
+              cy="70"
+              r={radius}
+              fill="none"
+              stroke="#059669"
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={tardeOffset}
+              strokeLinecap="round"
+              transform={`rotate(${-90 + (porcentajeManana * 360 / 100)} 70 70)`}
+              style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+            />
+          </svg>
           
           {/* Texto central */}
-          <text
-            x="70"
-            y="70"
-            textAnchor="middle"
-            fontSize="18"
-            fill={theme.palette.text.primary}
-            fontWeight="700"
-            dy=".3em"
-            fontFamily='"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
-            style={{
-              WebkitFontSmoothing: 'antialiased',
-              MozOsxFontSmoothing: 'grayscale',
-              textRendering: 'optimizeLegibility'
-            }}
-          >
-            {total}
-          </text>
-          <text
-            x="70"
-            y="85"
-            textAnchor="middle"
-            fontSize="12"
-            fill={theme.palette.text.secondary}
-            fontFamily='"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
-            style={{
-              WebkitFontSmoothing: 'antialiased',
-              MozOsxFontSmoothing: 'grayscale',
-              textRendering: 'optimizeLegibility'
-            }}
-          >
-            Total
-          </text>
-        </svg>
-      </div>
-      
-      {/* Leyenda */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 16
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          gap: 8
-        }}>
-          <div style={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            backgroundColor: '#3b82f6'
-          }} />
-          <div style={{
-            fontSize: '0.875rem',
-            color: theme.palette.text.primary,
-            fontWeight: 500,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
+          <Box sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center'
           }}>
-            Mañana ({porcentajeManana}%)
-          </div>
-        </div>
-        
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          gap: 8
-        }}>
-          <div style={{
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            backgroundColor: '#10b981'
-          }} />
-          <div style={{
-            fontSize: '0.875rem',
-            color: theme.palette.text.primary,
-            fontWeight: 500,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
-          }}>
-            Tarde ({porcentajeTarde}%)
-          </div>
-        </div>
-      </div>
+            <Typography 
+              variant="h5" 
+              sx={{ 
+                fontWeight: 800, 
+                color: theme.palette.text.primary,
+                fontSize: '1.25rem',
+                lineHeight: 1.2
+              }}
+            >
+              {total}
+            </Typography>
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: theme.palette.text.secondary,
+                fontSize: '0.75rem',
+                fontWeight: 600
+              }}
+            >
+              Total
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
       
-      {/* Detalles adicionales */}
-      <div style={{ 
+      {/* Leyenda mejorada */}
+      <Box sx={{ 
         display: 'flex', 
-        justifyContent: 'space-between',
-        marginTop: 16,
-        padding: '12px 16px',
-        background: theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.1)' 
-          : 'rgba(147, 112, 219, 0.05)',
-        borderRadius: 8,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`
+        justifyContent: 'space-between', 
+        alignItems: 'flex-start',
+        gap: 1
       }}>
-        <div style={{
+        {/* Mañana */}
+        <Box sx={{ 
+          flex: 1, 
           textAlign: 'center',
-          flex: 1
+          p: 1,
+          borderRadius: 2,
+          bgcolor: 'rgba(59, 130, 246, 0.1)',
+          border: '1px solid rgba(59, 130, 246, 0.2)'
         }}>
-          <div style={{
-            fontSize: '1.25rem',
-            fontWeight: 700,
-            color: '#3b82f6',
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            mb: 0.5 
           }}>
+            <Box sx={{ 
+              width: 8, 
+              height: 8, 
+              borderRadius: '50%', 
+              bgcolor: '#3b82f6', 
+              mr: 0.5 
+            }} />
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                fontWeight: 600,
+                color: '#3b82f6',
+                fontSize: '0.75rem'
+              }}
+            >
+              Mañana ({porcentajeManana.toFixed(0)}%)
+            </Typography>
+          </Box>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontWeight: 800, 
+              color: '#3b82f6',
+              fontSize: '1.1rem'
+            }}
+          >
             {horarioData.pedidos_manana}
-          </div>
-          <div style={{
-            fontSize: '0.75rem',
-            color: theme.palette.text.secondary,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
-          }}>
+          </Typography>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              color: theme.palette.text.secondary,
+              fontSize: '0.7rem'
+            }}
+          >
             11-13h
-          </div>
-        </div>
+          </Typography>
+        </Box>
         
-        <div style={{
+        {/* Tarde */}
+        <Box sx={{ 
+          flex: 1, 
           textAlign: 'center',
-          flex: 1
+          p: 1,
+          borderRadius: 2,
+          bgcolor: 'rgba(5, 150, 105, 0.1)',
+          border: '1px solid rgba(5, 150, 105, 0.2)'
         }}>
-          <div style={{
-            fontSize: '1.25rem',
-            fontWeight: 700,
-            color: '#10b981',
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            mb: 0.5 
           }}>
+            <Box sx={{ 
+              width: 8, 
+              height: 8, 
+              borderRadius: '50%', 
+              bgcolor: '#059669', 
+              mr: 0.5 
+            }} />
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                fontWeight: 600,
+                color: '#059669',
+                fontSize: '0.75rem'
+              }}
+            >
+              Tarde ({porcentajeTarde.toFixed(0)}%)
+            </Typography>
+          </Box>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontWeight: 800, 
+              color: '#059669',
+              fontSize: '1.1rem'
+            }}
+          >
             {horarioData.pedidos_tarde}
-          </div>
-          <div style={{
-            fontSize: '0.75rem',
-            color: theme.palette.text.secondary,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif'
-          }}>
+          </Typography>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              color: theme.palette.text.secondary,
+              fontSize: '0.7rem'
+            }}
+          >
             15-19h
-          </div>
-        </div>
-      </div>
-    </div>
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

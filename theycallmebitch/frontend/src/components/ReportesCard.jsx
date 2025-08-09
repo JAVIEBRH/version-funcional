@@ -139,7 +139,7 @@ const ReportesCard = () => {
             <Assessment sx={{ fontSize: 24, color: '#3b82f6' }} />
             <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem' }}>
               Reporte Ejecutivo
-              {loading && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#9370db' }}>🔄</span>}
+              {loading && <Typography component="span" sx={{ ml: 0.5, fontSize: '0.7rem', color: '#9370db' }}>🔄</Typography>}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>

@@ -1,115 +1,153 @@
-.clientes {
-  padding: 24px;
-  margin-left: 280px;
+/* Estilos para mejorar la calidad de las fuentes */
+* {
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.page-header {
-  margin-bottom: 32px;
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0.00938em !important;
 }
 
-.page-header h1 {
-  color: #1f2937;
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: 8px;
+/* Mejorar calidad de fuentes en Material-UI */
+.MuiTypography-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.page-header p {
-  color: #6b7280;
-  font-size: 16px;
-  margin: 0;
+.MuiButton-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 32px;
+.MuiTextField-root .MuiInputBase-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.stat-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  text-align: center;
+.MuiTableCell-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.stat-card h3 {
-  color: #6b7280;
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.MuiChip-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.stat-value {
-  color: #1f2937;
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
+.MuiAlert-root .MuiAlert-message {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.email-link,
-.phone-link {
-  color: #667eea;
-  text-decoration: none;
-  transition: color 0.2s ease;
+.MuiSelect-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.email-link:hover,
-.phone-link:hover {
-  color: #5a67d8;
-  text-decoration: underline;
+.MuiMenuItem-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.status-badge {
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.MuiBadge-root .MuiBadge-badge {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.status-active {
-  background: #d1fae5;
-  color: #059669;
+.MuiTooltip-root .MuiTooltip-tooltip {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  font-feature-settings: "kern" 1 !important;
+  font-kerning: normal !important;
 }
 
-.status-inactive {
-  background: #f3f4f6;
-  color: #6b7280;
+/* Mejorar específicamente los números grandes */
+.MuiTypography-h4 {
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.2 !important;
 }
 
-.status-suspended {
-  background: #fee2e2;
-  color: #dc2626;
+/* Mejorar los títulos */
+.MuiTypography-h6 {
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
 }
 
-.status-unknown {
-  background: #f3f4f6;
-  color: #6b7280;
+/* Mejorar el texto del cuerpo */
+.MuiTypography-body1 {
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
 }
 
-@media (max-width: 768px) {
-  .clientes {
-    margin-left: 0;
-    padding: 16px;
-  }
-  
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-  }
-  
-  .page-header h1 {
-    font-size: 24px;
-  }
-  
-  .stat-value {
-    font-size: 20px;
-  }
+.MuiTypography-body2 {
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+}
+
+/* Mejorar los chips */
+.MuiChip-label {
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+}
+
+/* Mejorar los botones */
+.MuiButton-label {
+  font-weight: 500 !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* Mejorar las celdas de tabla */
+.MuiTableCell-head {
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.MuiTableCell-body {
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
 } 

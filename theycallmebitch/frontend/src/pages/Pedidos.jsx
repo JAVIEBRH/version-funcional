@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, InputAdornment, Chip } from '@mui/material';
+import { Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, InputAdornment, Chip, Button, useTheme } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { getPedidos } from '../services/api';
 import Avatar from '@mui/material/Avatar';
-import IconButton from '@mui/material/IconButton';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Tooltip from '@mui/material/Tooltip';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import InventoryIcon from '@mui/icons-material/Inventory';
 
 export default function Pedidos({ refreshTrigger = 0 }) {
+  const theme = useTheme();
   const [pedidos, setPedidos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // Fecha actual por defecto
   const [pagina, setPagina] = useState(1);
   const pedidosPorPagina = 10;
+  
+
 
   const cargarPedidos = async () => {
     try {
@@ -28,10 +29,8 @@ export default function Pedidos({ refreshTrigger = 0 }) {
       setPedidos(pedidosOrdenados);
       console.log('Pedidos actualizados:', new Date().toLocaleTimeString());
       
-
-      
-      } catch (error) {
-        setPedidos([]);
+    } catch (error) {
+      setPedidos([]);
     }
   };
 
@@ -74,6 +73,8 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     return texto.includes(searchTerm.toLowerCase());
   });
 
+
+
   // Paginación
   const totalPaginas = Math.ceil(filteredPedidos.length / pedidosPorPagina);
   const pedidosPagina = filteredPedidos.slice((pagina - 1) * pedidosPorPagina, pagina * pedidosPorPagina);
@@ -91,33 +92,35 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     return null;
   }
 
+
+
   // Función para determinar el estilo del estado del pedido
   const getEstadoStyle = (status) => {
     const statusLower = (status || '').toLowerCase().trim();
     
     if (statusLower.includes('entregado') || statusLower.includes('completado') || statusLower.includes('finalizado')) {
       return {
-        bgcolor: '#dcfce7',
-        color: '#166534',
+        bgcolor: theme.palette.mode === 'dark' ? '#065f46' : '#dcfce7',
+        color: theme.palette.mode === 'dark' ? '#6ee7b7' : '#166534',
         label: 'Entregado'
       };
     } else if (statusLower.includes('preparando') || statusLower.includes('en proceso') || statusLower.includes('procesando')) {
       return {
-        bgcolor: '#fef3c7',
-        color: '#92400e',
+        bgcolor: theme.palette.mode === 'dark' ? '#92400e' : '#fef3c7',
+        color: theme.palette.mode === 'dark' ? '#fcd34d' : '#92400e',
         label: 'Preparando'
       };
     } else if (statusLower.includes('cancelado') || statusLower.includes('cancelada') || statusLower.includes('anulado')) {
       return {
-        bgcolor: '#fee2e2',
-        color: '#dc2626',
+        bgcolor: theme.palette.mode === 'dark' ? '#7f1d1d' : '#fee2e2',
+        color: theme.palette.mode === 'dark' ? '#fca5a5' : '#dc2626',
         label: 'Cancelado'
       };
     } else {
       // Estado por defecto para estados no reconocidos
       return {
-        bgcolor: '#f1f5f9',
-        color: '#64748b',
+        bgcolor: theme.palette.mode === 'dark' ? '#374151' : '#f1f5f9',
+        color: theme.palette.mode === 'dark' ? '#d1d5db' : '#64748b',
         label: status || 'Pendiente'
       };
     }
@@ -218,10 +221,16 @@ export default function Pedidos({ refreshTrigger = 0 }) {
       overflow: 'auto',
       height: '100vh'
     }}>
-      <Card sx={{ bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9', mb: 4 }}>
+      <Card sx={{ 
+        bgcolor: 'background.paper', 
+        boxShadow: theme.shadows[1], 
+        borderRadius: 3, 
+        border: `1px solid ${theme.palette.divider}`, 
+        mb: 4 
+      }}>
         <CardContent sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b' }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary' }}>
               Historial de Pedidos
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -234,7 +243,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 InputProps={{
                   sx: { 
                     fontWeight: 600,
-                    color: '#1e293b'
+                    color: 'text.primary'
                   }
                 }}
               />
@@ -247,7 +256,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#1e293b' }} />
+                    <SearchIcon sx={{ color: 'text.primary' }} />
                   </InputAdornment>
                 ),
               }}
@@ -255,10 +264,16 @@ export default function Pedidos({ refreshTrigger = 0 }) {
             </Box>
           </Box>
           <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
-            <Card sx={{ minWidth: 220, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+            <Card sx={{ 
+              minWidth: 220, 
+              bgcolor: 'background.paper', 
+              boxShadow: theme.shadows[1], 
+              borderRadius: 3, 
+              border: `1px solid ${theme.palette.divider}` 
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Tooltip title={`Suma total de ventas del ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>${ventasTotales.toLocaleString()}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>${ventasTotales.toLocaleString()}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
                   color: 'text.primary', 
@@ -270,10 +285,16 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 }}>Ventas Totales</Typography>
               </CardContent>
             </Card>
-            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+            <Card sx={{ 
+              minWidth: 180, 
+              bgcolor: 'background.paper', 
+              boxShadow: theme.shadows[1], 
+              borderRadius: 3, 
+              border: `1px solid ${theme.palette.divider}` 
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Tooltip title={`Pedidos pagados en efectivo el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{countEfectivo}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{countEfectivo}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
                   color: 'text.primary', 
@@ -285,10 +306,16 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 }}>Efectivo</Typography>
               </CardContent>
             </Card>
-            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+            <Card sx={{ 
+              minWidth: 180, 
+              bgcolor: 'background.paper', 
+              boxShadow: theme.shadows[1], 
+              borderRadius: 3, 
+              border: `1px solid ${theme.palette.divider}` 
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Tooltip title={`Pedidos pagados por transferencia el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{countTransferencia}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{countTransferencia}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
                   color: 'text.primary', 
@@ -300,10 +327,16 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 }}>Transferencia</Typography>
               </CardContent>
             </Card>
-            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+            <Card sx={{ 
+              minWidth: 180, 
+              bgcolor: 'background.paper', 
+              boxShadow: theme.shadows[1], 
+              borderRadius: 3, 
+              border: `1px solid ${theme.palette.divider}` 
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Tooltip title={`Pedidos pagados con tarjeta el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', cursor: 'pointer' }}>{countTarjeta}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{countTarjeta}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
                   color: 'text.primary', 
@@ -315,7 +348,13 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 }}>Tarjeta</Typography>
               </CardContent>
             </Card>
-            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+            <Card sx={{ 
+              minWidth: 180, 
+              bgcolor: 'background.paper', 
+              boxShadow: theme.shadows[1], 
+              borderRadius: 3, 
+              border: `1px solid ${theme.palette.divider}` 
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <LocalShippingIcon sx={{ color: '#10b981', fontSize: 20 }} />
@@ -333,7 +372,13 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 }}>Pedidos {selectedDate === new Date().toISOString().split('T')[0] ? 'Hoy' : 'del Día'}</Typography>
               </CardContent>
             </Card>
-            <Card sx={{ minWidth: 180, bgcolor: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', borderRadius: 3, border: '1px solid #f1f5f9' }}>
+            <Card sx={{ 
+              minWidth: 180, 
+              bgcolor: 'background.paper', 
+              boxShadow: theme.shadows[1], 
+              borderRadius: 3, 
+              border: `1px solid ${theme.palette.divider}` 
+            }}>
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <InventoryIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
@@ -355,19 +400,20 @@ export default function Pedidos({ refreshTrigger = 0 }) {
           <TableContainer>
             <Table>
               <TableHead>
-                <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                <TableRow sx={{ bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc' }}>
                   <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Cliente</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Dirección</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Fecha</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Monto</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Método de Pago</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Acciones</TableCell>
+
+
                 </TableRow>
               </TableHead>
               <TableBody>
                 {pedidosPagina.map((p, i) => (
-                  <TableRow key={i}>
+                  <TableRow key={i} sx={{ '&:hover': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' } }}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: '#3b82f6' }}>{(p.usuario || '?').charAt(0)}</Avatar>
@@ -381,7 +427,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                             textRendering: 'optimizeLegibility'
                           }}>{p.usuario || '-'}</Typography>
                           <Typography variant="body2" sx={{ 
-                            color: 'text.primary', 
+                            color: 'text.secondary', 
                             fontWeight: 600,
                             fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                             WebkitFontSmoothing: 'antialiased',
@@ -431,11 +477,8 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                         }}
                       />
                     </TableCell>
-                    <TableCell>
-                      <IconButton>
-                        <MoreVertIcon />
-                      </IconButton>
-                    </TableCell>
+
+
                   </TableRow>
                 ))}
               </TableBody>
@@ -443,9 +486,15 @@ export default function Pedidos({ refreshTrigger = 0 }) {
           </TableContainer>
           {/* Paginación rápida mejorada */}
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 2, flexWrap: 'wrap' }}>
-            <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={pagina === 1} style={{ minWidth: 36, marginRight: 8 }}>
+            <Button 
+              onClick={() => setPagina(p => Math.max(1, p - 1))} 
+              disabled={pagina === 1} 
+              sx={{ minWidth: 36, mr: 1 }}
+              variant="outlined"
+              size="small"
+            >
               Anterior
-            </button>
+            </Button>
           {/* Mostrar máximo 5 botones a la vez, con ... si hay muchas páginas */}
           {(() => {
             const botones = [];
@@ -458,55 +507,81 @@ export default function Pedidos({ refreshTrigger = 0 }) {
             }
             if (start > 1) {
               botones.push(
-                  <button key={1} onClick={() => setPagina(1)} style={{ minWidth: 36, margin: '0 4px', background: pagina === 1 ? '#3b82f6' : '#fff', color: pagina === 1 ? '#fff' : '#1e293b', border: '1px solid #e2e8f0', borderRadius: 4, fontWeight: pagina === 1 ? 700 : 400 }}>1</button>
+                <Button 
+                  key={1} 
+                  onClick={() => setPagina(1)} 
+                  variant={pagina === 1 ? 'contained' : 'outlined'}
+                  size="small"
+                  sx={{ minWidth: 36, mx: 0.5 }}
+                >
+                  1
+                </Button>
               );
               if (start > 2) {
-                  botones.push(<span key="start-ellipsis" style={{ 
-                    margin: '0 4px', 
-                    color: '#1e293b',
-                    fontWeight: 600,
-                    fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    textRendering: 'optimizeLegibility'
-                  }}>...</span>);
-                }
+                botones.push(
+                  <Typography key="start-ellipsis" sx={{ 
+                    mx: 0.5, 
+                    color: 'text.primary',
+                    fontWeight: 600
+                  }}>
+                    ...
+                  </Typography>
+                );
+              }
             }
             for (let i = start; i <= end; i++) {
               botones.push(
-                <button
+                <Button
                   key={i}
-                    onClick={() => setPagina(i)}
-                    style={{ minWidth: 36, margin: '0 4px', background: pagina === i ? '#3b82f6' : '#fff', color: pagina === i ? '#fff' : '#1e293b', border: '1px solid #e2e8f0', borderRadius: 4, fontWeight: pagina === i ? 700 : 400 }}
+                  onClick={() => setPagina(i)}
+                  variant={pagina === i ? 'contained' : 'outlined'}
+                  size="small"
+                  sx={{ minWidth: 36, mx: 0.5 }}
                 >
                   {i}
-                </button>
+                </Button>
               );
             }
             if (end < totalPaginas) {
               if (end < totalPaginas - 1) {
-                  botones.push(<span key="end-ellipsis" style={{ 
-                    margin: '0 4px', 
-                    color: '#1e293b',
-                    fontWeight: 600,
-                    fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    textRendering: 'optimizeLegibility'
-                  }}>...</span>);
+                botones.push(
+                  <Typography key="end-ellipsis" sx={{ 
+                    mx: 0.5, 
+                    color: 'text.primary',
+                    fontWeight: 600
+                  }}>
+                    ...
+                  </Typography>
+                );
               }
               botones.push(
-                  <button key={totalPaginas} onClick={() => setPagina(totalPaginas)} style={{ minWidth: 36, margin: '0 4px', background: pagina === totalPaginas ? '#3b82f6' : '#fff', color: pagina === totalPaginas ? '#fff' : '#1e293b', border: '1px solid #e2e8f0', borderRadius: 4, fontWeight: pagina === totalPaginas ? 700 : 400 }}>{totalPaginas}</button>
+                <Button 
+                  key={totalPaginas} 
+                  onClick={() => setPagina(totalPaginas)} 
+                  variant={pagina === totalPaginas ? 'contained' : 'outlined'}
+                  size="small"
+                  sx={{ minWidth: 36, mx: 0.5 }}
+                >
+                  {totalPaginas}
+                </Button>
               );
             }
             return botones;
           })()}
-            <button onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} disabled={pagina === totalPaginas} style={{ minWidth: 36, marginLeft: 8 }}>
+            <Button 
+              onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} 
+              disabled={pagina === totalPaginas} 
+              sx={{ minWidth: 36, ml: 1 }}
+              variant="outlined"
+              size="small"
+            >
               Siguiente
-            </button>
+            </Button>
           </Box>
         </CardContent>
       </Card>
+
+
     </Box>
   );
 } 

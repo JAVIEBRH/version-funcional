@@ -1,55 +1,61 @@
 import React from 'react';
+import { Box, Typography } from '@mui/material';
 
-export default function ClientesActivosCard({ 
+const ClientesActivosCard = ({ 
   title = 'Clientes Activos', 
-  value = 89, 
-  subtitle = 'Este mes',
-  percentageChange = 12.3,
-  isPositive = true 
-}) {
+  value = 450, 
+  subtitle = 'Este mes'
+}) => {
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      borderRadius: 8,
-      padding: 16,
-      color: 'white',
-      boxShadow: '0 4px 16px rgba(79, 172, 254, 0.2)',
-      transition: 'all 0.3s ease',
-      cursor: 'pointer',
-      height: 120
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <div>
-          <div style={{ fontSize: '0.75rem', opacity: 0.9, marginBottom: 2 }}>{title}</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4 }}>
-            {value}
-          </div>
-          <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>{subtitle}</div>
-        </div>
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.2)',
-          borderRadius: 6,
-          padding: 6,
-          fontSize: '1rem'
-        }}>
-          👥
-        </div>
-      </div>
-      
-      {percentageChange !== null && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
+    <Box
+      sx={{
+        background: 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
+        borderRadius: 3,
+        padding: 2,
+        border: '1px solid rgba(147, 112, 219, 0.1)',
+        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
+        transition: 'all 0.3s ease',
+        cursor: 'pointer',
+        '&:hover': {
+          transform: 'translateY(-1px)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+        }
+      }}
+    >
+      <Typography 
+        variant="caption" 
+        sx={{ 
+          opacity: 0.9, 
+          mb: 0.5,
+          fontSize: '0.75rem',
+          fontWeight: 600
+        }}
+      >
+        {title}
+      </Typography>
+      <Typography 
+        variant="h5" 
+        sx={{ 
+          fontWeight: 700, 
+          mb: 1,
+          fontSize: '1.5rem',
+          color: '#1e293b'
+        }}
+      >
+        {value.toLocaleString('es-CL')}
+      </Typography>
+      <Typography 
+        variant="caption" 
+        sx={{ 
+          opacity: 0.8,
           fontSize: '0.7rem',
-          opacity: 0.9
-        }}>
-          <span style={{ color: isPositive ? '#4ade80' : '#f87171' }}>
-            {isPositive ? '↗' : '↘'}
-          </span>
-          <span>{isPositive ? '+' : ''}{percentageChange}%</span>
-        </div>
-      )}
-    </div>
+          color: '#64748b'
+        }}
+      >
+        {subtitle}
+      </Typography>
+    </Box>
   );
-} 
+};
+
+export default ClientesActivosCard; 

@@ -111,7 +111,7 @@ export default function Local() {
 
   useEffect(() => {
     // Cargar datos reales del local
-    setLoading(false);
+      setLoading(false);
     
     // Actualización automática cada 10 minutos
     const interval = setInterval(() => {

@@ -73,9 +73,9 @@ const RentabilidadCard = () => {
   }, []);
 
   const getColorByValue = (value, threshold = 0) => {
-    if (value > threshold) return '#059669';
-    if (value < threshold) return '#dc2626';
-    return '#6b7280';
+    if (value > threshold) return theme.palette.custom.success;
+    if (value < threshold) return theme.palette.custom.critical;
+    return theme.palette.custom.neutral;
   };
 
   const getIconByValue = (value, threshold = 0) => {
@@ -616,8 +616,8 @@ const RentabilidadCard = () => {
                       <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
                         <ListItemIcon sx={{ minWidth: 24 }}>
                           <TrendingUp sx={{ 
-                            color: rec.prioridad === 'alta' ? '#dc2626' : 
-                                   rec.prioridad === 'media' ? '#f59e0b' : '#059669',
+                            color: rec.prioridad === 'alta' ? theme.palette.custom.critical : 
+                                   rec.prioridad === 'media' ? theme.palette.custom.warning : theme.palette.custom.success,
                             fontSize: 16
                           }} />
                         </ListItemIcon>

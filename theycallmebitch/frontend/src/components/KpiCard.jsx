@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '@mui/material/styles';
+import { Box, Typography, Chip } from '@mui/material';
 
 const KpiCard = ({ 
   title = 'Clientes Activos', 
@@ -12,113 +13,161 @@ const KpiCard = ({
   const theme = useTheme();
   
   return (
-    <div style={{
-      background: theme.palette.mode === 'dark' 
-        ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-        : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-      borderRadius: 12,
-      padding: 20,
-      color: theme.palette.text.primary,
-      boxShadow: theme.palette.mode === 'dark' 
-        ? '0 2px 12px rgba(0, 0, 0, 0.2)'
-        : '0 2px 12px rgba(0, 0, 0, 0.06)',
-      transition: 'all 0.3s ease',
-      cursor: 'pointer',
-      border: `1px solid ${theme.palette.mode === 'dark' 
-        ? 'rgba(147, 112, 219, 0.2)' 
-        : 'rgba(147, 112, 219, 0.1)'}`,
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ 
-            fontSize: '0.875rem', 
-            fontWeight: 700, 
-            color: theme.palette.text.primary, 
-            marginBottom: 8,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
-          }}>
+    <Box
+      sx={{
+        background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
+          : 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%)',
+        borderRadius: 4,
+        padding: 3,
+        color: theme.palette.text.primary,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+        border: `1px solid ${theme.palette.mode === 'dark' 
+          ? 'rgba(255,255,255,0.08)' 
+          : 'rgba(0,0,0,0.08)'}`,
+        position: 'relative',
+        overflow: 'hidden',
+        backdropFilter: 'blur(10px)',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.12)',
+          borderColor: theme.palette.mode === 'dark' 
+            ? 'rgba(255,255,255,0.15)' 
+            : 'rgba(0,0,0,0.15)'
+        }
+      }}
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+        <Box sx={{ flex: 1 }}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontWeight: 700, 
+              color: theme.palette.text.primary, 
+              mb: 1.5,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              fontSize: '1rem',
+              lineHeight: 1.3,
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1',
+              fontDisplay: 'swap'
+            }}
+          >
             {title}
-          </div>
-          <div style={{ 
-            fontSize: '1.75rem', 
-            fontWeight: 800, 
-            marginBottom: 4,
-            color: theme.palette.text.primary,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-            lineHeight: 1.1,
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
-          }}>
+          </Typography>
+          <Typography 
+            variant="h3" 
+            sx={{ 
+              fontWeight: 800, 
+              mb: 1,
+              color: theme.palette.text.primary,
+              lineHeight: 1.1,
+              fontSize: '2.5rem',
+              letterSpacing: '-0.02em',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1, "tnum" 1',
+              fontDisplay: 'swap'
+            }}
+          >
             {value.toLocaleString('es-CL')}
-          </div>
-          <div style={{ 
-            fontSize: '0.75rem', 
-            color: theme.palette.text.secondary,
-            fontWeight: 500,
-            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+          </Typography>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: theme.palette.text.secondary,
+              fontWeight: 500,
+              fontSize: '0.9rem',
+              lineHeight: 1.4,
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility',
+              fontFeatureSettings: '"liga" 1, "kern" 1',
+              fontDisplay: 'swap'
+            }}
+          >
+            {subtitle}
+          </Typography>
+        </Box>
+        <Chip
+          label={trend}
+          sx={{
+            background: isPositive 
+              ? theme.palette.mode === 'dark' 
+                ? 'rgba(34, 197, 94, 0.15)' 
+                : 'rgba(34, 197, 94, 0.1)'
+              : theme.palette.mode === 'dark' 
+                ? 'rgba(239, 68, 68, 0.15)' 
+                : 'rgba(239, 68, 68, 0.1)',
+            color: isPositive ? '#22c55e' : '#ef4444',
+            fontWeight: 700,
+            border: `1px solid ${isPositive 
+              ? theme.palette.mode === 'dark' 
+                ? 'rgba(34, 197, 94, 0.3)' 
+                : 'rgba(34, 197, 94, 0.2)'
+              : theme.palette.mode === 'dark' 
+                ? 'rgba(239, 68, 68, 0.3)' 
+                : 'rgba(239, 68, 68, 0.2)'}`,
+            fontSize: '0.875rem',
+            height: 'auto',
+            borderRadius: 2,
             WebkitFontSmoothing: 'antialiased',
             MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility'
-          }}>
-            {subtitle}
-          </div>
-        </div>
-        <div style={{
-          background: theme.palette.mode === 'dark' 
-            ? 'rgba(147, 112, 219, 0.2)' 
-            : 'rgba(147, 112, 219, 0.1)',
-          borderRadius: 8,
-          padding: '6px 8px',
-          fontSize: '0.75rem',
-          color: isPositive ? '#059669' : '#dc2626',
-          fontWeight: 600,
-          border: `1px solid ${isPositive ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
-          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}>
-          {trend}
-        </div>
-      </div>
+            textRendering: 'optimizeLegibility',
+            fontFeatureSettings: '"liga" 1, "kern" 1',
+            fontDisplay: 'swap',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              transform: 'scale(1.05)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            },
+            '& .MuiChip-label': {
+              padding: '8px 12px',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'optimizeLegibility'
+            }
+          }}
+        />
+      </Box>
       
-      {/* Gráfico de tendencia simplificado */}
-      <div style={{ 
+      {/* Gráfico de tendencia mejorado */}
+      <Box sx={{ 
         width: '100%', 
-        height: 24, 
-        marginTop: 8,
-        position: 'relative'
+        height: 32, 
+        mt: 2,
+        position: 'relative',
+        opacity: 0.8
       }}>
-        <svg width="100%" height="24" style={{ overflow: 'visible' }}>
-          <path
-            d="M0 20 Q15 12 30 16 T60 8 T90 12 T120 4 T150 8"
-            stroke="#9370db"
-            strokeWidth="1.5"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path
-            d="M0 20 Q15 12 30 16 T60 8 T90 12 T120 4 T150 8 L150 24 L0 24 Z"
-            fill="url(#gradient)"
-            opacity="0.3"
-          />
+        <svg width="100%" height="32" style={{ overflow: 'visible' }}>
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
+            <linearGradient id={`gradient-${Math.random()}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity="0.4"/>
+              <stop offset="100%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity="0.1"/>
             </linearGradient>
           </defs>
+          <path
+            d="M0 28 Q8 20 16 24 T32 16 T48 20 T64 12 T80 18 T96 14 T100 16"
+            stroke={isPositive ? "#22c55e" : "#ef4444"}
+            strokeWidth="2"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M0 28 Q8 20 16 24 T32 16 T48 20 T64 12 T80 18 T96 14 T100 16 L100 32 L0 32 Z"
+            fill={`url(#gradient-${Math.random()})`}
+            opacity="0.2"
+          />
         </svg>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
 
