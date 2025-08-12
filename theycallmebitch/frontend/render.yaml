@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: aguas-ancud-frontend-v2
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s dist -l $PORT
+    rootDir: .
+    envVars:
+      - key: VITE_API_URL
+        value: https://aguas-ancud-backend-v2.onrender.com
+      - key: NODE_ENV
+        value: production
