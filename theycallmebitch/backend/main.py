@@ -19,7 +19,13 @@ CORS_ORIGIN = os.getenv("CORS_ORIGIN", "http://localhost:5173")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[CORS_ORIGIN, "http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+    allow_origins=[
+        CORS_ORIGIN, 
+        "http://localhost:5173", 
+        "http://localhost:5174", 
+        "http://localhost:3000",
+        "https://dashboard-aguas-ancud-frontend-v2.onrender.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
