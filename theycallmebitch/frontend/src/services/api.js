@@ -2,7 +2,7 @@
 // Funciones para consumir la API del backend (FastAPI)
 
 // URL dinámica que funciona en desarrollo y producción
-const API_URL = 'http://localhost:8001';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 // Log para debugging
 console.log('API_URL configurada:', API_URL);
