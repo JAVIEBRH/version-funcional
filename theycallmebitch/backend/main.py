@@ -1728,9 +1728,15 @@ def get_ventas_semanales():
         }
         
         print("=== VENTAS SEMANALES ===")
+        print(f"Fecha inicio semana actual: {inicio_semana_actual}")
+        print(f"Fecha fin semana actual: {fin_semana_actual}")
+        print(f"Fecha inicio semana pasada: {inicio_semana_pasada}")
+        print(f"Fecha fin semana pasada: {fin_semana_pasada}")
+        print(f"Total pedidos en dataset: {len(df)}")
+        print(f"Pedidos semana actual: {pedidos_semana_actual_count}")
+        print(f"Pedidos semana pasada: {pedidos_semana_pasada_count}")
         print(f"Ventas semana actual: ${ventas_semana_actual:,}")
         print(f"Ventas semana pasada: ${ventas_semana_pasada:,}")
-        print(f"Pedidos semana actual: {pedidos_semana_actual_count}")
         print("=======================")
         
         return resultado
