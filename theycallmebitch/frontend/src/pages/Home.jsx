@@ -193,7 +193,7 @@ export default function Home() {
         ventasMensuales: kpisData.ventas_mes || 0,
         ventasSemanales: ventasSemanales,
         ventasDiarias: ventasDiarias,
-        bidones: Math.round((kpisData.litros_vendidos || 0) / 20), // 20 litros por bidón
+        bidones: Math.round((kpisData.total_litros_mes || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
         costos: kpisData.costos_reales || 0,
         costosMesPasado: costosMesPasado,
