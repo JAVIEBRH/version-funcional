@@ -136,15 +136,27 @@ export default function Home() {
       const ventasTotalesHistoricas = await getVentasTotalesHistoricas();
       console.log('Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
 
-      // Obtener ventas diarias y semanales REALES (no aproximaciones)
-      const ventasDiariasData = await getVentasDiarias();
-      const ventasSemanalesData = await getVentasSemanales();
-      console.log('Ventas diarias reales:', ventasDiariasData);
-      console.log('Ventas semanales reales:', ventasSemanalesData);
+      // Obtener ventas diarias y semanales
+      let ventasDiariasData, ventasSemanalesData;
+      try {
+        ventasDiariasData = await getVentasDiarias();
+        console.log('Ventas diarias reales:', ventasDiariasData);
+      } catch (error) {
+        console.log('Error obteniendo ventas diarias, usando aproximación:', error);
+        ventasDiariasData = { ventas_hoy: 0, ventas_mismo_dia_mes_anterior: 0 };
+      }
+      
+      try {
+        ventasSemanalesData = await getVentasSemanales();
+        console.log('Ventas semanales reales:', ventasSemanalesData);
+      } catch (error) {
+        console.log('Error obteniendo ventas semanales, usando aproximación:', error);
+        ventasSemanalesData = { ventas_semana_actual: 0, ventas_semana_pasada: 0 };
+      }
 
-      // Usar datos reales en lugar de aproximaciones
-      const ventasSemanales = ventasSemanalesData.ventas_semana_actual || 0;
-      const ventasDiarias = ventasDiariasData.ventas_hoy || 0;
+      // Usar datos reales o aproximaciones como fallback
+      const ventasSemanales = ventasSemanalesData.ventas_semana_actual || Math.round(kpisData.ventas_mes / 4);
+      const ventasDiarias = ventasDiariasData.ventas_hoy || Math.round(kpisData.ventas_mes / 30);
       const meta = calcularMeta(kpisData.ventas_mes_pasado);
       const progresoMeta = calcularProgresoMeta(kpisData.ventas_mes, meta);
       const ticketPromedio = calcularTicketPromedio(kpisData.ventas_mes, kpisData.total_pedidos_mes);
@@ -202,8 +214,8 @@ export default function Home() {
         ventasSemanales: ventasSemanales,
         ventasDiarias: ventasDiarias,
         // Datos de comparación para ventas diarias y semanales
-        ventasDiariasMesPasado: ventasDiariasData.ventas_mismo_dia_mes_anterior || 0,
-        ventasSemanalesMesPasado: ventasSemanalesData.ventas_semana_pasada || 0,
+        ventasDiariasMesPasado: ventasDiariasData.ventas_mismo_dia_mes_anterior || Math.round(kpisData.ventas_mes_pasado / 30),
+        ventasSemanalesMesPasado: ventasSemanalesData.ventas_semana_pasada || Math.round(kpisData.ventas_mes_pasado / 4),
         bidones: Math.round((kpisData.total_litros_mes || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
         costos: kpisData.costos_reales || 0,
