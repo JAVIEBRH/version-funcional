@@ -4,8 +4,8 @@ services:
     name: dashboard-aguas-ancud-frontend
     env: node
     plan: free
-    buildCommand: chmod +x build.sh && ./build.sh
-    startCommand: cd theycallmebitch/frontend && npx serve -s dist -l $PORT
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s dist -l $PORT
     rootDir: .
     envVars:
       - key: VITE_API_URL

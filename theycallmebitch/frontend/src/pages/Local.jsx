@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '@mui/material/styles';
 import { 
   Box, 
   Typography, 
@@ -19,7 +20,8 @@ import {
   Button,
   Divider,
   Alert,
-  LinearProgress
+  LinearProgress,
+  Tooltip
 } from '@mui/material';
 import { 
   TrendingUp, 
@@ -35,7 +37,16 @@ import {
   Email,
   Info
 } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+// Importar los mismos componentes del dashboard principal
+import VentasCard from '../components/VentasCard';
+import VentasMensualesCard from '../components/VentasMensualesCard';
+import VentasSemanalesCard from '../components/VentasSemanalesCard';
+import VentasDiariasCard from '../components/VentasDiariasCard';
+import BidonesCard from '../components/BidonesCard';
+import TicketPromedioCard from '../components/TicketPromedioCard';
+import ClientesActivosCard from '../components/ClientesActivosCard';
+import KpiMetaCard from '../components/KpiMetaCard';
+import CapacidadCard from '../components/CapacidadCard';
 import './Local.css';
 
 export default function Local() {
@@ -55,20 +66,29 @@ export default function Local() {
     ventasMes: 3200000,
     ventasAnio: 38500000,
     
+    // Datos de comparación del mes anterior
+    ventasHoyMesPasado: 98000,
+    ventasSemanaMesPasado: 720000,
+    ventasMesPasado: 2850000,
+    ventasAnioPasado: 34500000,
+    
     // Métricas de clientes
     clientesHoy: 15,
     clientesSemana: 98,
     clientesMes: 420,
     clientesAnio: 4850,
+    clientesMesPasado: 380,
     
     // Métricas de productos
     bidonesVendidosHoy: 25,
     bidonesVendidosSemana: 175,
     bidonesVendidosMes: 640,
     bidonesVendidosAnio: 7700,
+    bidonesVendidosMesPasado: 580,
     
     // Métricas de eficiencia
     ticketPromedio: 8300,
+    ticketPromedioMesPasado: 7800,
     eficienciaVentas: 94.5,
     satisfaccionClientes: 4.8,
     tiempoAtencion: 3.2,
@@ -146,82 +166,6 @@ export default function Local() {
     return ((actual - anterior) / anterior) * 100;
   };
 
-  // Componente KPI Card
-  const KpiCard = ({ title, value, subtitle, icon, trend, isPositive, color = '#3b82f6' }) => (
-    <Card sx={{ 
-      bgcolor: theme.palette.mode === 'dark' ? '#1a1a2e' : '#fff',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-      borderRadius: 3,
-      border: `1px solid ${theme.palette.divider}`,
-      height: '100%',
-      transition: 'all 0.3s ease',
-      '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: '0 8px 25px rgba(0,0,0,0.12)'
-      }
-    }}>
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Box sx={{ 
-            width: 48, 
-            height: 48, 
-            borderRadius: 2, 
-            bgcolor: color, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            color: 'white'
-          }}>
-            {icon}
-          </Box>
-          <Chip 
-            label={trend} 
-            size="small"
-            sx={{ 
-              bgcolor: isPositive ? '#dcfce7' : '#fee2e2',
-              color: isPositive ? '#166534' : '#dc2626',
-              fontWeight: 600
-            }}
-          />
-        </Box>
-        
-        <Typography variant="h4" sx={{ 
-          fontWeight: 700, 
-          color: theme.palette.text.primary,
-          mb: 1,
-          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}>
-          {typeof value === 'number' ? value.toLocaleString('es-CL') : value}
-        </Typography>
-        
-        <Typography variant="body1" sx={{ 
-          color: theme.palette.text.secondary, 
-          fontWeight: 600,
-          mb: 1,
-          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}>
-          {title}
-        </Typography>
-        
-        <Typography variant="body2" sx={{ 
-          color: theme.palette.text.secondary,
-          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-          WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility'
-        }}>
-          {subtitle}
-        </Typography>
-      </CardContent>
-    </Card>
-  );
-
   if (loading) {
     return (
       <Box sx={{ 
@@ -247,16 +191,43 @@ export default function Local() {
       mx: 'auto', 
       p: 3,
       minHeight: '100vh',
-      overflow: 'auto',
-      height: '100vh'
+      bgcolor: 'background.default'
     }}>
+      {/* Header Principal */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h3" sx={{
+          fontWeight: 700,
+          color: 'text.primary',
+          mb: 1,
+          fontSize: '2.5rem',
+          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+          textRendering: 'optimizeLegibility',
+          fontFeatureSettings: '"kern" 1, "liga" 1, "calt" 1',
+        }}>
+          Dashboard Local Aguas Ancud
+        </Typography>
+        <Typography variant="body1" sx={{
+          color: 'text.secondary',
+          fontSize: '1.1rem',
+          fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
+        }}>
+          Panel de control y métricas del local en tiempo real
+        </Typography>
+      </Box>
+
       {/* Header del Local */}
       <Card sx={{ 
-        bgcolor: theme.palette.mode === 'dark' ? '#1a1a2e' : '#fff',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+        bgcolor: 'background.paper',
         borderRadius: 3,
         border: `1px solid ${theme.palette.divider}`,
-        mb: 4
+        boxShadow: theme.shadows[1],
+        mb: 4,
+        transition: 'all 0.3s ease-in-out',
+        '&:hover': {
+          boxShadow: theme.shadows[4],
+        }
       }}>
         <CardContent sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -315,133 +286,153 @@ export default function Local() {
         </CardContent>
       </Card>
 
-      {/* KPI Cards - Ventas */}
-      <Typography variant="h5" sx={{ 
-        fontWeight: 700, 
-        color: theme.palette.text.primary,
-        mb: 3,
-        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
-      }}>
-        📊 Métricas de Ventas
-      </Typography>
-      
+      {/* Dashboard Local - Mismo estilo que Home */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Primera fila - Ventas principales */}
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Ventas Hoy"
+          <VentasDiariasCard 
+            title="VENTAS DIARIAS"
             value={localData.ventasHoy}
-            subtitle="Ingresos del día actual"
-            icon={<AttachMoney />}
-            trend="+12.5%"
-            isPositive={true}
-            color="#10b981"
+            subtitle="Hoy vs Mismo día mes anterior"
+            percentageChange={calcularPorcentajeCambio(localData.ventasHoy, localData.ventasHoyMesPasado)}
+            isPositive={calcularPorcentajeCambio(localData.ventasHoy, localData.ventasHoyMesPasado) >= 0}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Ventas Semana"
+          <VentasSemanalesCard 
+            title="VENTAS SEMANALES"
             value={localData.ventasSemana}
-            subtitle="Ingresos de esta semana"
-            icon={<TrendingUp />}
-            trend="+8.3%"
-            isPositive={true}
-            color="#3b82f6"
+            subtitle="Esta semana"
+            percentageChange={calcularPorcentajeCambio(localData.ventasSemana, localData.ventasSemanaMesPasado)}
+            isPositive={calcularPorcentajeCambio(localData.ventasSemana, localData.ventasSemanaMesPasado) >= 0}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Ventas Mes"
+          <VentasMensualesCard 
+            title="VENTAS MENSUALES"
             value={localData.ventasMes}
-            subtitle="Ingresos del mes actual"
-            icon={<TrendingUp />}
-            trend="+15.2%"
-            isPositive={true}
-            color="#f59e0b"
+            subtitle="Este mes"
+            percentageChange={calcularPorcentajeCambio(localData.ventasMes, localData.ventasMesPasado)}
+            isPositive={calcularPorcentajeCambio(localData.ventasMes, localData.ventasMesPasado) >= 0}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Ventas Año"
+          <VentasCard 
+            title="VENTAS TOTALES LOCALES"
             value={localData.ventasAnio}
-            subtitle="Ingresos del año actual"
-            icon={<TrendingUp />}
-            trend="+22.1%"
-            isPositive={true}
-            color="#8b5cf6"
+            subtitle="Acumulado del local"
+            percentageChange={calcularPorcentajeCambio(localData.ventasAnio, localData.ventasAnioPasado)}
+            isPositive={calcularPorcentajeCambio(localData.ventasAnio, localData.ventasAnioPasado) >= 0}
           />
         </Grid>
-      </Grid>
 
-      {/* KPI Cards - Clientes y Productos */}
-      <Typography variant="h5" sx={{ 
-        fontWeight: 700, 
-        color: theme.palette.text.primary,
-        mb: 3,
-        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
-      }}>
-        👥 Clientes y Productos
-      </Typography>
-      
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Segunda fila - Métricas de productos y clientes */}
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Clientes Hoy"
-            value={localData.clientesHoy}
-            subtitle="Clientes atendidos hoy"
-            icon={<People />}
-            trend="+20%"
-            isPositive={true}
-            color="#10b981"
+          <BidonesCard 
+            title="BIDONES VENDIDOS"
+            value={localData.bidonesVendidosMes}
+            subtitle="Este mes"
+            percentageChange={calcularPorcentajeCambio(localData.bidonesVendidosMes, localData.bidonesVendidosMesPasado)}
+            isPositive={calcularPorcentajeCambio(localData.bidonesVendidosMes, localData.bidonesVendidosMesPasado) >= 0}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Bidones Vendidos"
-            value={localData.bidonesVendidosHoy}
-            subtitle="Bidones vendidos hoy"
-            icon={<Inventory />}
-            trend="+15%"
-            isPositive={true}
-            color="#3b82f6"
+          <TicketPromedioCard 
+            title="TICKET PROMEDIO"
+            value={localData.ticketPromedio}
+            subtitle="Por pedido"
+            percentageChange={calcularPorcentajeCambio(localData.ticketPromedio, localData.ticketPromedioMesPasado)}
+            isPositive={calcularPorcentajeCambio(localData.ticketPromedio, localData.ticketPromedioMesPasado) >= 0}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Ticket Promedio"
-            value={`$${localData.ticketPromedio.toLocaleString()}`}
-            subtitle="Valor promedio por venta"
-            icon={<ShoppingCart />}
-            trend="+5.2%"
-            isPositive={true}
-            color="#f59e0b"
+          <ClientesActivosCard 
+            title="CLIENTES ACTIVOS"
+            value={localData.clientesMes}
+            subtitle="Este mes"
+            percentageChange={calcularPorcentajeCambio(localData.clientesMes, localData.clientesMesPasado)}
+            isPositive={calcularPorcentajeCambio(localData.clientesMes, localData.clientesMesPasado) >= 0}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <KpiCard
-            title="Eficiencia Ventas"
-            value={`${localData.eficienciaVentas}%`}
-            subtitle="Eficiencia en ventas"
-            icon={<TrendingUp />}
-            trend="+2.1%"
-            isPositive={true}
-            color="#8b5cf6"
+          <Card sx={{
+            bgcolor: 'background.paper',
+            borderRadius: 3,
+            border: `1px solid ${theme.palette.divider}`,
+            boxShadow: theme.shadows[1],
+            height: '100%',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              boxShadow: theme.shadows[4],
+            }
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h4" sx={{ 
+                fontWeight: 700, 
+                color: theme.palette.text.primary,
+                fontSize: '2rem',
+                mb: 1
+              }}>
+                {localData.clientesHoy}
+              </Typography>
+              <Typography variant="body1" sx={{ 
+                color: theme.palette.text.secondary,
+                fontWeight: 600,
+                mb: 1
+              }}>
+                CLIENTES HOY
+              </Typography>
+              <Typography variant="body2" sx={{ 
+                color: theme.palette.text.secondary
+              }}>
+                Clientes atendidos hoy
+              </Typography>
+              <Chip
+                label="+20%"
+                size="small"
+                sx={{
+                  mt: 1,
+                  bgcolor: theme.palette.success.light,
+                  color: theme.palette.success.dark,
+                  fontWeight: 600,
+                }}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Tercera fila - Métricas especiales */}
+        <Grid item xs={12} sm={6} md={6}>
+          <KpiMetaCard 
+            title="META DE VENTAS LOCAL"
+            currentValue={localData.ventasMes}
+            targetValue={localData.ventasMes * 1.2} // Meta 20% superior
+            percentage={Math.round((localData.ventasMes / (localData.ventasMes * 1.2)) * 100)}
+            subtitle="Objetivo Mensual"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={6}>
+          <CapacidadCard 
+            title="CAPACIDAD DEL LOCAL"
+            currentValue={75} // Capacidad actual del local
+            maxValue={100}
+            percentage={75}
+            subtitle="Capacidad de atención"
           />
         </Grid>
       </Grid>
 
       {/* Gráfico de Ventas Diarias */}
       <Card sx={{ 
-        bgcolor: theme.palette.mode === 'dark' ? '#1a1a2e' : '#fff',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+        bgcolor: 'background.paper',
         borderRadius: 3,
         border: `1px solid ${theme.palette.divider}`,
-        mb: 4
+        boxShadow: theme.shadows[1],
+        mb: 4,
+        transition: 'all 0.3s ease-in-out',
+        '&:hover': {
+          boxShadow: theme.shadows[4],
+        }
       }}>
         <CardContent sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ 
@@ -528,11 +519,15 @@ export default function Local() {
 
       {/* Productos Más Vendidos */}
       <Card sx={{ 
-        bgcolor: theme.palette.mode === 'dark' ? '#1a1a2e' : '#fff',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+        bgcolor: 'background.paper',
         borderRadius: 3,
         border: `1px solid ${theme.palette.divider}`,
-        mb: 4
+        boxShadow: theme.shadows[1],
+        mb: 4,
+        transition: 'all 0.3s ease-in-out',
+        '&:hover': {
+          boxShadow: theme.shadows[4],
+        }
       }}>
         <CardContent sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ 
@@ -621,11 +616,15 @@ export default function Local() {
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Card sx={{ 
-            bgcolor: theme.palette.mode === 'dark' ? '#1a1a2e' : '#fff',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+            bgcolor: 'background.paper',
             borderRadius: 3,
             border: `1px solid ${theme.palette.divider}`,
-            height: '100%'
+            boxShadow: theme.shadows[1],
+            height: '100%',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              boxShadow: theme.shadows[4],
+            }
           }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ 
@@ -682,11 +681,15 @@ export default function Local() {
         
         <Grid item xs={12} md={6}>
           <Card sx={{ 
-            bgcolor: theme.palette.mode === 'dark' ? '#1a1a2e' : '#fff',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+            bgcolor: 'background.paper',
             borderRadius: 3,
             border: `1px solid ${theme.palette.divider}`,
-            height: '100%'
+            boxShadow: theme.shadows[1],
+            height: '100%',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              boxShadow: theme.shadows[4],
+            }
           }}>
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ 
@@ -702,7 +705,7 @@ export default function Local() {
               </Typography>
               
               {localData.personal.map((persona, index) => (
-                <Box key={index} sx={{ mb: 3, p: 2, bgcolor: theme.palette.mode === 'dark' ? '#374151' : '#f8fafc', borderRadius: 2 }}>
+                <Box key={index} sx={{ mb: 3, p: 2, bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc', borderRadius: 2 }}>
                   <Typography variant="subtitle1" sx={{ 
                     fontWeight: 600,
                     color: theme.palette.text.primary,

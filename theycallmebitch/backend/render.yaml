@@ -1,0 +1,12 @@
+services:
+  # Backend Service
+  - type: web
+    name: dashboard-aguas-ancud-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: .
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
