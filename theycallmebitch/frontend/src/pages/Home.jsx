@@ -17,7 +17,7 @@ import IvaCard from '../components/IvaCard';
 import CostosCard from '../components/CostosCard';
 import UtilidadesCard from '../components/UtilidadesCard';
 import RentabilidadCard from '../components/RentabilidadCard';
-import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas, getVentasDiarias, getVentasSemanales } from '../services/api';
+import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas } from '../services/api';
 import './Home.css';
 
 export default function Home() {
@@ -34,8 +34,6 @@ export default function Home() {
     ventasMensuales: 0,
     ventasSemanales: 0,
     ventasDiarias: 0,
-    ventasDiariasMesPasado: 0,
-    ventasSemanalesMesPasado: 0,
     bidones: 0,
     iva: 0,
     costos: 0,
@@ -136,50 +134,9 @@ export default function Home() {
       const ventasTotalesHistoricas = await getVentasTotalesHistoricas();
       console.log('Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
 
-      // Calcular ventas de hoy directamente desde los pedidos
-      const fechaActual = new Date();
-      const fechaHoy = `${fechaActual.getDate().toString().padStart(2, '0')}-${(fechaActual.getMonth() + 1).toString().padStart(2, '0')}-${fechaActual.getFullYear()}`;
-      
-      let ventasHoy = 0;
-      let ventasMismoDiaMesPasado = 0;
-      
-      // Calcular ventas de hoy
-      pedidosData.forEach(pedido => {
-        if (pedido.fecha === fechaHoy && pedido.nombrelocal === 'Aguas Ancud') {
-          ventasHoy += parseInt(pedido.precio) || 0;
-        }
-      });
-      
-      // Calcular ventas del mismo día del mes pasado
-      const mesPasado = new Date(fechaActual.getFullYear(), fechaActual.getMonth() - 1, fechaActual.getDate());
-      const fechaMesPasado = `${mesPasado.getDate().toString().padStart(2, '0')}-${(mesPasado.getMonth() + 1).toString().padStart(2, '0')}-${mesPasado.getFullYear()}`;
-      
-      pedidosData.forEach(pedido => {
-        if (pedido.fecha === fechaMesPasado && pedido.nombrelocal === 'Aguas Ancud') {
-          ventasMismoDiaMesPasado += parseInt(pedido.precio) || 0;
-        }
-      });
-      
-      console.log('=== VENTAS DIARIAS CALCULADAS ===');
-      console.log('Fecha hoy:', fechaHoy);
-      console.log('Ventas hoy:', ventasHoy);
-      console.log('Fecha mes pasado:', fechaMesPasado);
-      console.log('Ventas mes pasado:', ventasMismoDiaMesPasado);
-      console.log('================================');
-      
-      // Obtener ventas semanales
-      let ventasSemanalesData;
-      try {
-        ventasSemanalesData = await getVentasSemanales();
-        console.log('Ventas semanales reales:', ventasSemanalesData);
-      } catch (error) {
-        console.log('Error obteniendo ventas semanales, usando aproximación:', error);
-        ventasSemanalesData = { ventas_semana_actual: 0, ventas_semana_pasada: 0 };
-      }
-
-      // Usar datos reales o aproximaciones como fallback
-      const ventasSemanales = ventasSemanalesData.ventas_semana_actual || Math.round(kpisData.ventas_mes / 4);
-      const ventasDiarias = ventasHoy; // Usar ventas reales de hoy
+      // Calcular datos derivados
+      const ventasSemanales = calcularVentasSemanales(kpisData.ventas_mes);
+      const ventasDiarias = calcularVentasDiarias(kpisData.ventas_mes);
       const meta = calcularMeta(kpisData.ventas_mes_pasado);
       const progresoMeta = calcularProgresoMeta(kpisData.ventas_mes, meta);
       const ticketPromedio = calcularTicketPromedio(kpisData.ventas_mes, kpisData.total_pedidos_mes);
@@ -236,10 +193,7 @@ export default function Home() {
         ventasMensuales: kpisData.ventas_mes || 0,
         ventasSemanales: ventasSemanales,
         ventasDiarias: ventasDiarias,
-        // Datos de comparación para ventas diarias y semanales
-        ventasDiariasMesPasado: ventasMismoDiaMesPasado,
-        ventasSemanalesMesPasado: ventasSemanalesData.ventas_semana_pasada || Math.round(kpisData.ventas_mes_pasado / 4),
-        bidones: Math.round((kpisData.total_litros_mes || 0) / 20), // 20 litros por bidón
+        bidones: Math.round((kpisData.litros_vendidos || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
         costos: kpisData.costos_reales || 0,
         costosMesPasado: costosMesPasado,
@@ -532,8 +486,8 @@ export default function Home() {
           >
             <VentasSemanalesCard 
               value={data.ventasSemanales}
-              percentageChange={calcularPorcentajeCambio(data.ventasSemanales, data.ventasSemanalesMesPasado)}
-              isPositive={data.ventasSemanales >= data.ventasSemanalesMesPasado}
+              percentageChange={calcularPorcentajeCambio(data.ventasSemanales, data.ventasMesPasado / 4)}
+              isPositive={data.ventasSemanales >= data.ventasMesPasado / 4}
             />
           </Box>
 
@@ -550,8 +504,8 @@ export default function Home() {
           >
             <VentasDiariasCard 
               value={data.ventasDiarias}
-              percentageChange={calcularPorcentajeCambio(data.ventasDiarias, data.ventasDiariasMesPasado)}
-              isPositive={data.ventasDiarias >= data.ventasDiariasMesPasado}
+              percentageChange={calcularPorcentajeCambio(data.ventasDiarias, data.ventasMesPasado / 30)}
+              isPositive={data.ventasDiarias >= data.ventasMesPasado / 30}
             />
           </Box>
 

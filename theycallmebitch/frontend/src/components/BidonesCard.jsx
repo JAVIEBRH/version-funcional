@@ -46,8 +46,8 @@ const BidonesCard = ({
       // Función para calcular bidones basándose en el precio
       const calcularBidones = (precio) => {
         const precioNum = parseInt(precio) || 0;
-        // Cada bidón cuesta $2000 (PRECIO FIJO)
-        return Math.max(1, Math.floor(precioNum / 2000));
+        // Asumiendo que cada bidón cuesta aproximadamente $4000
+        return Math.max(1, Math.floor(precioNum / 4000));
       };
       
       // Función para parsear fecha

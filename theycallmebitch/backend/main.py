@@ -1643,17 +1643,46 @@ def get_ventas_diarias():
 
 @app.get("/ventas-semanales", response_model=Dict)
 def get_ventas_semanales():
-    """Calcular ventas semanales reales - SIMPLIFICADO"""
+    """Calcular ventas semanales reales"""
     try:
-        # Obtener pedidos
+        # Obtener pedidos usando la función existente
         response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
         response.raise_for_status()
         pedidos = response.json()
+    except Exception as e:
+        print("Error al obtener pedidos para ventas semanales:", e)
+        return {
+            "ventas_semana_actual": 0,
+            "ventas_semana_pasada": 0,
+            "pedidos_semana_actual": 0,
+            "pedidos_semana_pasada": 0,
+            "porcentaje_cambio": 0,
+            "es_positivo": True
+        }
+    
+    try:
+        df = pd.DataFrame(pedidos)
         
-        # Filtrar solo Aguas Ancud
-        pedidos_aguas_ancud = [p for p in pedidos if p.get('nombrelocal') == 'Aguas Ancud']
+        # Filtrar Aguas Ancud
+        if 'nombrelocal' in df.columns:
+            df = df[df['nombrelocal'] == 'Aguas Ancud']
         
-        # Calcular fechas de semana actual y pasada
+        if df.empty or 'fecha' not in df.columns:
+            return {
+                "ventas_semana_actual": 0,
+                "ventas_semana_pasada": 0,
+                "pedidos_semana_actual": 0,
+                "pedidos_semana_pasada": 0,
+                "porcentaje_cambio": 0,
+                "es_positivo": True
+            }
+        
+        # Procesar fechas y precios
+        df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
+        df = df.dropna(subset=['fecha_parsed'])
+        df['precio'] = pd.to_numeric(df['precio'], errors='coerce').fillna(0)
+        
+        # Calcular fechas de semana
         hoy = datetime.now().date()
         inicio_semana_actual = hoy - timedelta(days=hoy.weekday())
         fin_semana_actual = inicio_semana_actual + timedelta(days=6)
@@ -1661,35 +1690,23 @@ def get_ventas_semanales():
         inicio_semana_pasada = inicio_semana_actual - timedelta(days=7)
         fin_semana_pasada = fin_semana_actual - timedelta(days=7)
         
-        # Calcular ventas de la semana actual
-        ventas_semana_actual = 0
-        pedidos_semana_actual = 0
+        # Filtrar pedidos por semana
+        pedidos_semana_actual = df[
+            (df['fecha_parsed'].dt.date >= inicio_semana_actual) & 
+            (df['fecha_parsed'].dt.date <= fin_semana_actual)
+        ]
         
-        for pedido in pedidos_aguas_ancud:
-            try:
-                fecha_pedido = datetime.strptime(pedido['fecha'], "%d-%m-%Y").date()
-                precio = int(pedido['precio']) if pedido['precio'].isdigit() else 0
-                
-                if inicio_semana_actual <= fecha_pedido <= fin_semana_actual:
-                    ventas_semana_actual += precio
-                    pedidos_semana_actual += 1
-            except:
-                continue
+        pedidos_semana_pasada = df[
+            (df['fecha_parsed'].dt.date >= inicio_semana_pasada) & 
+            (df['fecha_parsed'].dt.date <= fin_semana_pasada)
+        ]
         
-        # Calcular ventas de la semana pasada
-        ventas_semana_pasada = 0
-        pedidos_semana_pasada = 0
+        # Calcular métricas
+        ventas_semana_actual = pedidos_semana_actual['precio'].sum()
+        pedidos_semana_actual_count = len(pedidos_semana_actual)
         
-        for pedido in pedidos_aguas_ancud:
-            try:
-                fecha_pedido = datetime.strptime(pedido['fecha'], "%d-%m-%Y").date()
-                precio = int(pedido['precio']) if pedido['precio'].isdigit() else 0
-                
-                if inicio_semana_pasada <= fecha_pedido <= fin_semana_pasada:
-                    ventas_semana_pasada += precio
-                    pedidos_semana_pasada += 1
-            except:
-                continue
+        ventas_semana_pasada = pedidos_semana_pasada['precio'].sum()
+        pedidos_semana_pasada_count = len(pedidos_semana_pasada)
         
         # Calcular porcentaje de cambio
         if ventas_semana_pasada > 0:
@@ -1700,24 +1717,26 @@ def get_ventas_semanales():
             es_positivo = ventas_semana_actual > 0
         
         resultado = {
-            "ventas_semana_actual": ventas_semana_actual,
-            "ventas_semana_pasada": ventas_semana_pasada,
-            "pedidos_semana_actual": pedidos_semana_actual,
-            "pedidos_semana_pasada": pedidos_semana_pasada,
+            "ventas_semana_actual": int(ventas_semana_actual),
+            "ventas_semana_pasada": int(ventas_semana_pasada),
+            "pedidos_semana_actual": pedidos_semana_actual_count,
+            "pedidos_semana_pasada": pedidos_semana_pasada_count,
             "porcentaje_cambio": round(porcentaje_cambio, 1),
-            "es_positivo": es_positivo
+            "es_positivo": es_positivo,
+            "fecha_inicio_semana": inicio_semana_actual.strftime("%d-%m-%Y"),
+            "fecha_fin_semana": fin_semana_actual.strftime("%d-%m-%Y")
         }
         
-        print(f"=== VENTAS SEMANALES SIMPLIFICADO ===")
-        print(f"Semana actual ({inicio_semana_actual} a {fin_semana_actual}): ${ventas_semana_actual:,} ({pedidos_semana_actual} pedidos)")
-        print(f"Semana pasada ({inicio_semana_pasada} a {fin_semana_pasada}): ${ventas_semana_pasada:,} ({pedidos_semana_pasada} pedidos)")
-        print(f"Cambio: {porcentaje_cambio}%")
-        print("=====================================")
+        print("=== VENTAS SEMANALES ===")
+        print(f"Ventas semana actual: ${ventas_semana_actual:,}")
+        print(f"Ventas semana pasada: ${ventas_semana_pasada:,}")
+        print(f"Pedidos semana actual: {pedidos_semana_actual_count}")
+        print("=======================")
         
         return resultado
         
     except Exception as e:
-        print(f"Error en ventas semanales: {e}")
+        print(f"Error en cálculo de ventas semanales: {e}")
         return {
             "ventas_semana_actual": 0,
             "ventas_semana_pasada": 0,
