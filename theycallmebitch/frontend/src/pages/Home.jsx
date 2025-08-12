@@ -136,16 +136,39 @@ export default function Home() {
       const ventasTotalesHistoricas = await getVentasTotalesHistoricas();
       console.log('Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
 
-      // Obtener ventas diarias y semanales
-      let ventasDiariasData, ventasSemanalesData;
-      try {
-        ventasDiariasData = await getVentasDiarias();
-        console.log('Ventas diarias reales:', ventasDiariasData);
-      } catch (error) {
-        console.log('Error obteniendo ventas diarias, usando aproximación:', error);
-        ventasDiariasData = { ventas_hoy: 0, ventas_mismo_dia_mes_anterior: 0 };
-      }
+      // Calcular ventas de hoy directamente desde los pedidos
+      const fechaActual = new Date();
+      const fechaHoy = `${fechaActual.getDate().toString().padStart(2, '0')}-${(fechaActual.getMonth() + 1).toString().padStart(2, '0')}-${fechaActual.getFullYear()}`;
       
+      let ventasHoy = 0;
+      let ventasMismoDiaMesPasado = 0;
+      
+      // Calcular ventas de hoy
+      pedidosData.forEach(pedido => {
+        if (pedido.fecha === fechaHoy && pedido.nombrelocal === 'Aguas Ancud') {
+          ventasHoy += parseInt(pedido.precio) || 0;
+        }
+      });
+      
+      // Calcular ventas del mismo día del mes pasado
+      const mesPasado = new Date(fechaActual.getFullYear(), fechaActual.getMonth() - 1, fechaActual.getDate());
+      const fechaMesPasado = `${mesPasado.getDate().toString().padStart(2, '0')}-${(mesPasado.getMonth() + 1).toString().padStart(2, '0')}-${mesPasado.getFullYear()}`;
+      
+      pedidosData.forEach(pedido => {
+        if (pedido.fecha === fechaMesPasado && pedido.nombrelocal === 'Aguas Ancud') {
+          ventasMismoDiaMesPasado += parseInt(pedido.precio) || 0;
+        }
+      });
+      
+      console.log('=== VENTAS DIARIAS CALCULADAS ===');
+      console.log('Fecha hoy:', fechaHoy);
+      console.log('Ventas hoy:', ventasHoy);
+      console.log('Fecha mes pasado:', fechaMesPasado);
+      console.log('Ventas mes pasado:', ventasMismoDiaMesPasado);
+      console.log('================================');
+      
+      // Obtener ventas semanales
+      let ventasSemanalesData;
       try {
         ventasSemanalesData = await getVentasSemanales();
         console.log('Ventas semanales reales:', ventasSemanalesData);
@@ -156,7 +179,7 @@ export default function Home() {
 
       // Usar datos reales o aproximaciones como fallback
       const ventasSemanales = ventasSemanalesData.ventas_semana_actual || Math.round(kpisData.ventas_mes / 4);
-      const ventasDiarias = ventasDiariasData.ventas_hoy || Math.round(kpisData.ventas_mes / 30);
+      const ventasDiarias = ventasHoy; // Usar ventas reales de hoy
       const meta = calcularMeta(kpisData.ventas_mes_pasado);
       const progresoMeta = calcularProgresoMeta(kpisData.ventas_mes, meta);
       const ticketPromedio = calcularTicketPromedio(kpisData.ventas_mes, kpisData.total_pedidos_mes);
@@ -214,7 +237,7 @@ export default function Home() {
         ventasSemanales: ventasSemanales,
         ventasDiarias: ventasDiarias,
         // Datos de comparación para ventas diarias y semanales
-        ventasDiariasMesPasado: ventasDiariasData.ventas_mismo_dia_mes_anterior || Math.round(kpisData.ventas_mes_pasado / 30),
+        ventasDiariasMesPasado: ventasMismoDiaMesPasado,
         ventasSemanalesMesPasado: ventasSemanalesData.ventas_semana_pasada || Math.round(kpisData.ventas_mes_pasado / 4),
         bidones: Math.round((kpisData.total_litros_mes || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
