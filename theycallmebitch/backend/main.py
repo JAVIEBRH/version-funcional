@@ -1649,6 +1649,7 @@ def get_ventas_semanales():
         response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
         response.raise_for_status()
         pedidos = response.json()
+        print(f"Pedidos obtenidos para ventas semanales: {len(pedidos)}")
     except Exception as e:
         print("Error al obtener pedidos para ventas semanales:", e)
         return {
@@ -1662,12 +1663,26 @@ def get_ventas_semanales():
     
     try:
         df = pd.DataFrame(pedidos)
+        print(f"DataFrame creado con {len(df)} filas")
         
         # Filtrar Aguas Ancud
         if 'nombrelocal' in df.columns:
             df = df[df['nombrelocal'] == 'Aguas Ancud']
+            print(f"Después del filtro Aguas Ancud: {len(df)} filas")
         
-        if df.empty or 'fecha' not in df.columns:
+        if df.empty:
+            print("DataFrame vacío después del filtro")
+            return {
+                "ventas_semana_actual": 0,
+                "ventas_semana_pasada": 0,
+                "pedidos_semana_actual": 0,
+                "pedidos_semana_pasada": 0,
+                "porcentaje_cambio": 0,
+                "es_positivo": True
+            }
+        
+        if 'fecha' not in df.columns:
+            print("Columna 'fecha' no encontrada")
             return {
                 "ventas_semana_actual": 0,
                 "ventas_semana_pasada": 0,
@@ -1678,9 +1693,13 @@ def get_ventas_semanales():
             }
         
         # Procesar fechas y precios
+        print("Procesando fechas...")
         df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
         df = df.dropna(subset=['fecha_parsed'])
+        print(f"Después de procesar fechas: {len(df)} filas")
+        
         df['precio'] = pd.to_numeric(df['precio'], errors='coerce').fillna(0)
+        print("Precios procesados")
         
         # Calcular fechas de semana
         hoy = datetime.now().date()
