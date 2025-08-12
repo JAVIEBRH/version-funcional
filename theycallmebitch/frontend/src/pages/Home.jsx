@@ -17,7 +17,7 @@ import IvaCard from '../components/IvaCard';
 import CostosCard from '../components/CostosCard';
 import UtilidadesCard from '../components/UtilidadesCard';
 import RentabilidadCard from '../components/RentabilidadCard';
-import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas } from '../services/api';
+import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas, getVentasDiarias, getVentasSemanales } from '../services/api';
 import './Home.css';
 
 export default function Home() {
@@ -34,6 +34,8 @@ export default function Home() {
     ventasMensuales: 0,
     ventasSemanales: 0,
     ventasDiarias: 0,
+    ventasDiariasMesPasado: 0,
+    ventasSemanalesMesPasado: 0,
     bidones: 0,
     iva: 0,
     costos: 0,
@@ -134,9 +136,15 @@ export default function Home() {
       const ventasTotalesHistoricas = await getVentasTotalesHistoricas();
       console.log('Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
 
-      // Calcular datos derivados
-      const ventasSemanales = calcularVentasSemanales(kpisData.ventas_mes);
-      const ventasDiarias = calcularVentasDiarias(kpisData.ventas_mes);
+      // Obtener ventas diarias y semanales REALES (no aproximaciones)
+      const ventasDiariasData = await getVentasDiarias();
+      const ventasSemanalesData = await getVentasSemanales();
+      console.log('Ventas diarias reales:', ventasDiariasData);
+      console.log('Ventas semanales reales:', ventasSemanalesData);
+
+      // Usar datos reales en lugar de aproximaciones
+      const ventasSemanales = ventasSemanalesData.ventas_semana_actual || 0;
+      const ventasDiarias = ventasDiariasData.ventas_hoy || 0;
       const meta = calcularMeta(kpisData.ventas_mes_pasado);
       const progresoMeta = calcularProgresoMeta(kpisData.ventas_mes, meta);
       const ticketPromedio = calcularTicketPromedio(kpisData.ventas_mes, kpisData.total_pedidos_mes);
@@ -193,6 +201,9 @@ export default function Home() {
         ventasMensuales: kpisData.ventas_mes || 0,
         ventasSemanales: ventasSemanales,
         ventasDiarias: ventasDiarias,
+        // Datos de comparación para ventas diarias y semanales
+        ventasDiariasMesPasado: ventasDiariasData.ventas_mismo_dia_mes_anterior || 0,
+        ventasSemanalesMesPasado: ventasSemanalesData.ventas_semana_pasada || 0,
         bidones: Math.round((kpisData.total_litros_mes || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
         costos: kpisData.costos_reales || 0,
@@ -486,8 +497,8 @@ export default function Home() {
           >
             <VentasSemanalesCard 
               value={data.ventasSemanales}
-              percentageChange={calcularPorcentajeCambio(data.ventasSemanales, data.ventasMesPasado / 4)}
-              isPositive={data.ventasSemanales >= data.ventasMesPasado / 4}
+              percentageChange={calcularPorcentajeCambio(data.ventasSemanales, data.ventasSemanalesMesPasado)}
+              isPositive={data.ventasSemanales >= data.ventasSemanalesMesPasado}
             />
           </Box>
 
@@ -504,8 +515,8 @@ export default function Home() {
           >
             <VentasDiariasCard 
               value={data.ventasDiarias}
-              percentageChange={calcularPorcentajeCambio(data.ventasDiarias, data.ventasMesPasado / 30)}
-              isPositive={data.ventasDiarias >= data.ventasMesPasado / 30}
+              percentageChange={calcularPorcentajeCambio(data.ventasDiarias, data.ventasDiariasMesPasado)}
+              isPositive={data.ventasDiarias >= data.ventasDiariasMesPasado}
             />
           </Box>
 
