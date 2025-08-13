@@ -14,10 +14,8 @@ services:
         value: https://dashboard-aguas-ancud-frontend.onrender.com
 
   # Frontend Service
-  - type: web
+  - type: static
     name: dashboard-aguas-ancud-frontend
-    env: static
-    plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     rootDir: theycallmebitch/frontend
