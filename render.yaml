@@ -10,16 +10,3 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
-      - key: CORS_ORIGIN
-        value: https://dashboard-aguas-ancud-frontend.onrender.com
-
-  # Frontend Service
-  - type: static
-    name: dashboard-aguas-ancud-frontend
-    env: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    rootDir: theycallmebitch/frontend
-    envVars:
-      - key: VITE_API_URL
-        value: https://dashboard-aguas-ancud-backend.onrender.com
