@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    rootDir: .
+    rootDir: theycallmebitch/backend
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
@@ -20,7 +20,7 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
-    rootDir: ../frontend
+    rootDir: theycallmebitch/frontend
     envVars:
       - key: VITE_API_URL
         value: https://dashboard-aguas-ancud-backend.onrender.com
