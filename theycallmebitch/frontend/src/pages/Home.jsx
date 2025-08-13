@@ -134,67 +134,28 @@ export default function Home() {
       const ventasTotalesHistoricas = await getVentasTotalesHistoricas();
       console.log('Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
 
-      // CALCULAR VENTAS DE HOY DESDE PEDIDOS REALES
+      // CALCULAR VENTAS DE HOY - VERSIÓN SIMPLIFICADA
       const fechaActual = new Date();
       const dia = fechaActual.getDate().toString().padStart(2, '0');
       const mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0');
       const anio = fechaActual.getFullYear();
       const fechaHoy = `${dia}-${mes}-${anio}`;
       
-      console.log('=== DEBUG VENTAS DIARIAS - VERSIÓN FINAL ===');
-      console.log('Fecha calculada:', fechaHoy);
-      console.log('Total pedidos:', pedidosData.length);
-      
       let ventasHoy = 0;
-      let pedidosEncontrados = 0;
       
       // Buscar pedidos de hoy
-      for (let i = 0; i < pedidosData.length; i++) {
-        const pedido = pedidosData[i];
+      pedidosData.forEach(pedido => {
         if (pedido.fecha === fechaHoy && pedido.nombrelocal === 'Aguas Ancud') {
-          const precio = parseInt(pedido.precio) || 0;
-          ventasHoy += precio;
-          pedidosEncontrados++;
-          console.log(`Pedido ${pedidosEncontrados}: ${pedido.fecha} - $${precio}`);
+          ventasHoy += parseInt(pedido.precio) || 0;
         }
-      }
+      });
       
       // Si no encuentra pedidos de hoy, usar aproximación
       if (ventasHoy === 0) {
         ventasHoy = Math.round(kpisData.ventas_mes / 30);
-        console.log('No se encontraron pedidos de hoy, usando aproximación:', ventasHoy);
       }
       
-      // Calcular ventas del mismo día del mes pasado
-      const mesPasado = new Date(fechaActual.getFullYear(), fechaActual.getMonth() - 1, fechaActual.getDate());
-      const diaMesPasado = mesPasado.getDate().toString().padStart(2, '0');
-      const mesMesPasado = (mesPasado.getMonth() + 1).toString().padStart(2, '0');
-      const anioMesPasado = mesPasado.getFullYear();
-      const fechaMesPasado = `${diaMesPasado}-${mesMesPasado}-${anioMesPasado}`;
-      
-      let ventasMismoDiaMesPasado = 0;
-      let pedidosMesPasadoEncontrados = 0;
-      
-      for (let i = 0; i < pedidosData.length; i++) {
-        const pedido = pedidosData[i];
-        if (pedido.fecha === fechaMesPasado && pedido.nombrelocal === 'Aguas Ancud') {
-          const precio = parseInt(pedido.precio) || 0;
-          ventasMismoDiaMesPasado += precio;
-          pedidosMesPasadoEncontrados++;
-        }
-      }
-      
-      // Si no encuentra pedidos del mes pasado, usar aproximación
-      if (ventasMismoDiaMesPasado === 0) {
-        ventasMismoDiaMesPasado = Math.round(kpisData.ventas_mes_pasado / 30);
-      }
-      
-      console.log('Ventas totales hoy:', ventasHoy);
-      console.log('Pedidos encontrados hoy:', pedidosEncontrados);
-      console.log('Fecha mes pasado:', fechaMesPasado);
-      console.log('Ventas mes pasado:', ventasMismoDiaMesPasado);
-      console.log('Pedidos encontrados mes pasado:', pedidosMesPasadoEncontrados);
-      console.log('============================');
+      console.log('Ventas hoy:', ventasHoy);
       
       // Calcular datos derivados
       const ventasSemanales = calcularVentasSemanales(kpisData.ventas_mes);
@@ -255,7 +216,7 @@ export default function Home() {
         ventasMensuales: kpisData.ventas_mes || 0,
         ventasSemanales: ventasSemanales,
         ventasDiarias: ventasDiarias,
-        ventasDiariasMesPasado: ventasMismoDiaMesPasado,
+        ventasDiariasMesPasado: Math.round(kpisData.ventas_mes_pasado / 30),
         bidones: Math.round((kpisData.total_litros_mes || 0) / 20), // 20 litros por bidón
         iva: kpisData.iva || 0,
         costos: kpisData.costos_reales || 0,
