@@ -1,0 +1,5 @@
+[33m2b1db047[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: Corregir bidones y ventas diarias - Cálculo directo desde pedidos reales
+[33m20a19940[m fix: Corregir ventas diarias - Formato fecha DD-MM-YYYY y cálculo directo desde pedidos
+[33me3f7a5e7[m fix: Corregir formato de fecha para ventas diarias - Usar DD-MM-YYYY exacto
+[33mc2f2a4de[m fix: Agregar fallback para ventas semanales y diarias - Usar aproximaciones si fallan los endpoints
+[33m17b66b45[m fix: Simplificar completamente endpoint ventas semanales - Usar lógica simple sin pandas
