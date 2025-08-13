@@ -141,7 +141,7 @@ export default function Home() {
       const anio = fechaActual.getFullYear();
       const fechaHoy = `${dia}-${mes}-${anio}`;
       
-      console.log('=== DEBUG VENTAS DIARIAS ===');
+      console.log('=== DEBUG VENTAS DIARIAS - VERSIÓN FINAL ===');
       console.log('Fecha calculada:', fechaHoy);
       console.log('Total pedidos:', pedidosData.length);
       
