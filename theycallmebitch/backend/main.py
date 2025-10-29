@@ -7,7 +7,19 @@ from datetime import datetime, timedelta
 import json
 import numpy as np
 import warnings
+import asyncio
+import logging
 warnings.filterwarnings('ignore')
+
+# Configuración del logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Importar nuevos modelos
+from models import Order, OrderResponse, OrderCreate, convert_legacy_order, order_to_response
+from data_adapter import data_adapter
+# from services.kpi_calculator import kpi_calculator
+# from utils.cache_manager import cache_manager
 
 app = FastAPI(title="API Aguas Ancud", version="2.0")
 
@@ -23,8 +35,10 @@ app.add_middleware(
         CORS_ORIGIN, 
         "http://localhost:5173", 
         "http://localhost:5174", 
+        "http://localhost:5175", 
         "http://localhost:3000",
-        "https://dashboard-aguas-ancud-frontend-v2.onrender.com"
+        "https://dashboard-aguas-ancud-frontend-v2.onrender.com",
+        "https://frontenddashboard-opqq.onrender.com"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -33,6 +47,8 @@ app.add_middleware(
 
 ENDPOINT_CLIENTES = "https://fluvi.cl/fluviDos/GoApp/endpoints/clientes.php"
 ENDPOINT_PEDIDOS = "https://fluvi.cl/fluviDos/GoApp/endpoints/pedidos.php"
+ENDPOINT_PEDIDOS_NUEVO = "https://gobackend-qomm.onrender.com/api/store/orders"
+STORE_ID = "68697bf9c8e5172fd536738f"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # Cache para factores recalibrados
@@ -162,54 +178,173 @@ def calcularTicketPromedio(ventas, pedidos):
     except:
         return 0
 
+def parse_fecha_iso(fecha_str):
+    """Parsear fecha del formato ISO a datetime"""
+    try:
+        return datetime.fromisoformat(fecha_str.replace('Z', '+00:00'))
+    except:
+        return None
+
+def obtener_datos_hibridos():
+    """Obtiene datos combinando JSON anterior (históricos) + nuevo JSON (actuales)"""
+    try:
+        print("Obteniendo datos híbridos: histórico + actual...")
+        
+        # 1. Obtener datos históricos (JSON anterior)
+        response_antiguo = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
+        response_antiguo.raise_for_status()
+        pedidos_historicos = response_antiguo.json()
+        print(f"Datos históricos obtenidos: {len(pedidos_historicos)} pedidos")
+        
+        # 2. Obtener datos actuales (nuevo JSON MongoDB)
+        response_nuevo = requests.get(f"{ENDPOINT_PEDIDOS_NUEVO}?storeId={STORE_ID}&limit=1000", timeout=10)
+        response_nuevo.raise_for_status()
+        data_nuevo = response_nuevo.json()
+        pedidos_actuales = data_nuevo['data']['docs'] if data_nuevo['success'] else []
+        print(f"Datos actuales obtenidos: {len(pedidos_actuales)} pedidos")
+        
+        # 3. Convertir datos nuevos al formato esperado
+        pedidos_convertidos = []
+        for pedido in pedidos_actuales:
+            # Convertir fecha ISO a formato DD-MM-YYYY
+            fecha_iso = pedido['createdAt']
+            fecha_dt = parse_fecha_iso(fecha_iso)
+            fecha_formateada = fecha_dt.strftime('%d-%m-%Y') if fecha_dt else '01-01-2025'
+            
+            pedido_convertido = {
+                'id': pedido['_id'],
+                'precio': str(pedido['price']),
+                'fecha': fecha_formateada,
+                'metodopago': pedido['paymentMethod'],
+                'status': pedido['status'],
+                'usuario': pedido['customer'].get('email', ''),
+                'telefonou': pedido['customer'].get('phone', ''),
+                'dire': pedido['customer'].get('address', ''),
+                'lat': str(pedido['customer'].get('lat', '')),
+                'lon': str(pedido['customer'].get('lon', '')),
+                'nombrelocal': 'Aguas Ancud',
+                'retirolocal': 'no' if pedido['deliveryType'] == 'domicilio' else 'si',
+                'hora': fecha_dt.strftime('%H:%M:%S') if fecha_dt else '00:00:00',
+                'horaagenda': pedido.get('deliverySchedule', {}).get('hour', ''),
+                'ordenpedido': str(len(pedido.get('products', []))),
+                'comuna': pedido['customer'].get('address', '').split(',')[-1].strip() if pedido['customer'].get('address') else '',
+                'deptoblock': pedido['customer'].get('block', ''),
+                'observacion': pedido['customer'].get('observations', ''),
+                'notific': pedido['customer'].get('notificationToken', ''),
+                'userdelivery': pedido.get('deliveryPerson', {}).get('id', ''),
+                'despachador': pedido.get('deliveryPerson', {}).get('name', ''),
+                'observaciondos': pedido.get('merchantObservation', ''),
+                'calific': str(pedido.get('rating', {}).get('value', '')),
+                'transferpay': str(pedido.get('transferPay', False)).lower()
+            }
+            pedidos_convertidos.append(pedido_convertido)
+        
+        # 4. Combinar: históricos + actuales
+        todos_los_pedidos = pedidos_historicos + pedidos_convertidos
+        
+        print(f"Total combinado: {len(todos_los_pedidos)} pedidos")
+        print(f"  - Históricos: {len(pedidos_historicos)}")
+        print(f"  - Actuales: {len(pedidos_convertidos)}")
+        
+        return todos_los_pedidos
+        
+    except Exception as e:
+        print(f"Error obteniendo datos híbridos: {e}")
+        # Fallback al endpoint antiguo
+        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
 @app.get("/pedidos", response_model=List[Dict])
 def get_pedidos():
-    """Obtener pedidos filtrados solo de Aguas Ancud"""
+    """Obtener pedidos combinados (históricos + actuales) en formato original"""
     try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        print("Respuesta pedidos:", response.text[:500])  # Solo los primeros 500 caracteres
-        response.raise_for_status()
-        try:
-            pedidos = response.json()
-            print(f"Pedidos obtenidos: {len(pedidos)} registros")
-        except Exception as e:
-            print("Error al parsear JSON de pedidos:", e)
-            raise HTTPException(status_code=502, detail="Respuesta de pedidos no es JSON válido")
+        print("Obteniendo pedidos combinados usando capa de adaptación...")
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        print(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
+        
+        df = pd.DataFrame(pedidos)
+        print(f"Total de pedidos antes del filtro: {len(df)}")
+        
+        if 'nombrelocal' in df.columns:
+            df = df[df['nombrelocal'] == 'Aguas Ancud']
+            print(f"Pedidos después del filtro Aguas Ancud: {len(df)}")
+            print(f"Locales únicos en los datos: {df['nombrelocal'].unique()}")
+        
+        # Convertir fechas y agregar columna cliente
+        if 'fecha' in df.columns:
+            df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
+            df['fecha_iso'] = df['fecha_parsed'].apply(lambda x: x.isoformat() if x else None)
+        
+        # Agregar columna cliente basada en usuario
+        if 'usuario' in df.columns:
+            df['cliente'] = df['usuario']
+        
+        return df.to_dict(orient='records')
+        
     except Exception as e:
-        print("Error al obtener pedidos:", e)
-        raise HTTPException(status_code=502, detail=f"No se pudo conectar al servidor externo de pedidos: {e}")
-    
-    df = pd.DataFrame(pedidos)
-    print(f"Total de pedidos antes del filtro: {len(df)}")
-    
-    if 'nombrelocal' in df.columns:
-        df = df[df['nombrelocal'] == 'Aguas Ancud']
-        print(f"Pedidos después del filtro Aguas Ancud: {len(df)}")
-        print(f"Locales únicos en los datos: {df['nombrelocal'].unique()}")
-    
-    # Convertir fechas y agregar columna cliente
-    if 'fecha' in df.columns:
-        df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
-        df['fecha_iso'] = df['fecha_parsed'].apply(lambda x: x.isoformat() if x else None)
-    
-    # Agregar columna cliente basada en usuario
-    if 'usuario' in df.columns:
-        df['cliente'] = df['usuario']
-    
-    return df.to_dict(orient='records')
+        print("Error al obtener pedidos combinados:", e)
+        raise HTTPException(status_code=502, detail=f"No se pudo obtener pedidos combinados: {e}")
 
 
 
 @app.get("/clientes", response_model=List[Dict])
 def get_clientes():
-    """Obtener clientes únicos de Aguas Ancud a partir de los pedidos, incluyendo monto del último pedido"""
+    """Obtener clientes combinados (históricos + actuales) en formato original"""
     try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
+        print("Obteniendo clientes combinados usando capa de adaptación...")
+        clientes = data_adapter.obtener_clientes_combinados()
+        print(f"Clientes combinados obtenidos: {len(clientes)} registros")
+        
+        # Si no hay clientes del endpoint antiguo, extraer de pedidos
+        if not clientes:
+            print("No hay clientes del endpoint antiguo, extrayendo de pedidos...")
+            pedidos = data_adapter.obtener_pedidos_combinados()
+            clientes = extraer_clientes_de_pedidos(pedidos)
+        
+        return clientes
+        
     except Exception as e:
-        print("Error al obtener pedidos para clientes:", e)
+        print("Error al obtener clientes combinados:", e)
         return []
+
+def extraer_clientes_de_pedidos(pedidos: List[Dict]) -> List[Dict]:
+    """Extrae clientes únicos de los pedidos"""
+    try:
+        clientes_dict = {}
+        
+        for pedido in pedidos:
+            usuario = pedido.get('usuario', '')
+            if usuario and usuario not in clientes_dict:
+                clientes_dict[usuario] = {
+                    'id': pedido.get('id', ''),
+                    'idcliente': pedido.get('id', ''),
+                    'nombre': usuario.split('@')[0] if '@' in usuario else usuario,
+                    'correo': usuario,
+                    'clave': '',
+                    'direc': pedido.get('dire', ''),
+                    'comuna': pedido.get('comuna', ''),
+                    'deptoblock': pedido.get('deptoblock', ''),
+                    'lat': pedido.get('lat', ''),
+                    'lon': pedido.get('lon', ''),
+                    'telefono': pedido.get('telefonou', ''),
+                    'verificar': '1',
+                    'notifictoken': pedido.get('notific', ''),
+                    'fecha': pedido.get('fecha', ''),
+                    'dia': pedido.get('dia', ''),
+                    'mes': pedido.get('mes', ''),
+                    'ano': pedido.get('ano', ''),
+                    'localoficial': 'wgxlp3dB1YxbdmT',
+                    'dispositivo': '',
+                    'v': '2.0.0'
+                }
+        
+        return list(clientes_dict.values())
+        
+    except Exception as e:
+        print(f"Error extrayendo clientes de pedidos: {e}")
+        return []
+    
     df = pd.DataFrame(pedidos)
     if 'nombrelocal' in df.columns:
         df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
@@ -225,35 +360,36 @@ def get_clientes():
     clientes = clientes[cols].rename(columns={'precio': 'monto_ultimo_pedido'}).to_dict(orient='records')
     return clientes
 
+@app.get("/pedidos-v2", response_model=List[Dict])
+def get_pedidos_v2():
+    """Endpoint con nuevo esquema MongoDB para pedidos"""
+    try:
+        # Cargar datos migrados
+        with open('orders_migrated.json', 'r', encoding='utf-8') as f:
+            orders = json.load(f)
+        
+        print(f"Pedidos migrados cargados: {len(orders)} registros")
+        return orders
+    except FileNotFoundError:
+        print("Archivo orders_migrated.json no encontrado, usando endpoint legacy")
+        return get_pedidos()
+    except Exception as e:
+        print(f"Error cargando datos migrados: {e}")
+    return get_pedidos()
+
 @app.get("/kpis", response_model=Dict)
 def get_kpis():
-    """Calcular KPIs principales de Aguas Ancud"""
-    print("=== INICIO ENDPOINT KPIs ===")
+    """Calcular KPIs principales de Aguas Ancud usando datos combinados"""
+    logger.info("=== INICIO ENDPOINT KPIs OPTIMIZADO ===")
+    start_time = datetime.now()
+    
     try:
-        print("Intentando obtener pedidos desde:", ENDPOINT_PEDIDOS)
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        print(f"Status code: {response.status_code}")
-        response.raise_for_status()
-        try:
-            pedidos = response.json()
-            print(f"Pedidos obtenidos: {len(pedidos)} registros")
-        except Exception as e:
-            print("Error al parsear JSON de KPIs:", e)
-            print("Respuesta recibida:", response.text[:200])
-            return {
-                "ventas_mes": 0,
-                "ventas_mes_pasado": 0,
-                "total_pedidos_mes": 0,
-                "total_pedidos_mes_pasado": 0,
-                "total_litros_mes": 0,
-                "litros_vendidos_mes_pasado": 0,
-                "costos_reales": 0,
-                "iva": 0,
-                "punto_equilibrio": 0,
-                "clientes_activos": 0,
-            }
+        logger.info("Obteniendo datos combinados para KPIs...")
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        logger.info(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
+        
     except Exception as e:
-        print("Error al obtener pedidos para KPIs:", e)
+        logger.error(f"Error al obtener datos combinados para KPIs: {e}")
         return {
             "ventas_mes": 0,
             "ventas_mes_pasado": 0,
@@ -267,19 +403,12 @@ def get_kpis():
             "clientes_activos": 0,
         }
     
+    # Procesar datos usando lógica optimizada pero compatible
     df = pd.DataFrame(pedidos)
-    print(f"Total de pedidos para KPIs antes del filtro: {len(df)}")
-    print(f"Columnas disponibles: {list(df.columns)}")
-    
-    if 'nombrelocal' in df.columns:
-        df = df[df['nombrelocal'] == 'Aguas Ancud']
-        print(f"Pedidos para KPIs después del filtro Aguas Ancud: {len(df)}")
-        print(f"Locales únicos en KPIs: {df['nombrelocal'].unique()}")
-    else:
-        print("ADVERTENCIA: No se encontró columna 'nombrelocal'")
+    logger.info(f"Total de pedidos para KPIs: {len(df)}")
     
     if df.empty or 'fecha' not in df.columns:
-        print("DataFrame vacío o sin columna fecha")
+        logger.warning("DataFrame vacío o sin columna fecha")
         return {
             "ventas_mes": 0,
             "ventas_mes_pasado": 0,
@@ -297,20 +426,17 @@ def get_kpis():
         # Convertir fechas correctamente
         df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
         df = df.dropna(subset=['fecha_parsed'])
-        print(f"Pedidos con fechas válidas: {len(df)}")
+        logger.info(f"Pedidos con fechas válidas: {len(df)}")
         
         # Convertir precios
         df['precio'] = pd.to_numeric(df['precio'], errors='coerce').fillna(0)
-        df['cantidad'] = df['precio'] // 2000
         
-        # Agregar columna cliente basada en usuario
-        if 'usuario' in df.columns:
-            df['cliente'] = df['usuario']
-        
-        # Calcular fechas para filtros
+        # Calcular fechas para filtros - usar fecha real de hoy
         hoy = datetime.now()
         mes_actual = hoy.month
         anio_actual = hoy.year
+        logger.info(f"Fecha actual: {hoy.strftime('%Y-%m-%d')}")
+        logger.info(f"Mes actual: {mes_actual}, Año: {anio_actual}")
         
         # Mes pasado
         if mes_actual == 1:
@@ -324,82 +450,72 @@ def get_kpis():
         pedidos_mes = df[(df['fecha_parsed'].dt.month == mes_actual) & (df['fecha_parsed'].dt.year == anio_actual)]
         pedidos_mes_pasado = df[(df['fecha_parsed'].dt.month == mes_pasado) & (df['fecha_parsed'].dt.year == anio_pasado)]
         
-        print(f"Pedidos mes actual: {len(pedidos_mes)}")
-        print(f"Pedidos mes pasado: {len(pedidos_mes_pasado)}")
+        logger.info(f"Pedidos mes actual: {len(pedidos_mes)}")
+        logger.info(f"Pedidos mes pasado: {len(pedidos_mes_pasado)}")
         
-        # Calcular KPIs
+        # Calcular KPIs básicos
         ventas_mes = pedidos_mes['precio'].sum()
         ventas_mes_pasado = pedidos_mes_pasado['precio'].sum()
-        total_bidones_mes = pedidos_mes['cantidad'].sum()
-        total_bidones_mes_pasado = pedidos_mes_pasado['cantidad'].sum()
+        
+        # Calcular bidones basado en ordenpedido
+        if 'ordenpedido' in pedidos_mes.columns:
+            total_bidones_mes = pedidos_mes['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        else:
+            total_bidones_mes = len(pedidos_mes)
+        
+        if 'ordenpedido' in pedidos_mes_pasado.columns:
+            total_bidones_mes_pasado = pedidos_mes_pasado['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        else:
+            total_bidones_mes_pasado = len(pedidos_mes_pasado)
         
         # Cálculo de costos según especificaciones
-        cuota_camion = 260000  # Costo fijo mensual del camión
-        costo_tapa = 51  # Costo por tapa (sin IVA)
-        precio_venta_bidon = 2000
-        
-        # Costo por bidón: 1 tapa + IVA
-        costo_tapa_con_iva = costo_tapa * 1.19  # 51 + 19% IVA = 60.69 pesos
-        costos_variables = costo_tapa_con_iva * total_bidones_mes  # Costos por bidones vendidos
-        costos_reales = cuota_camion + costos_variables  # Costos fijos + variables
+        cuota_camion = 260000
+        costo_tapa = 51
+        costo_tapa_con_iva = costo_tapa * 1.19
+        costos_variables = costo_tapa_con_iva * total_bidones_mes
+        costos_reales = cuota_camion + costos_variables
         
         # Cálculo de IVA
-        iva_ventas = ventas_mes * 0.19  # IVA de las ventas
-        iva_tapas = (costo_tapa * total_bidones_mes) * 0.19  # IVA de las tapas compradas
-        iva = iva_ventas - iva_tapas  # IVA neto a pagar
+        iva_ventas = ventas_mes * 0.19
+        iva_tapas = (costo_tapa * total_bidones_mes) * 0.19
+        iva = iva_ventas - iva_tapas
         
-        # Cálculo de IVA del mes pasado
-        iva_ventas_mes_pasado = ventas_mes_pasado * 0.19
-        iva_tapas_mes_pasado = (costo_tapa * total_bidones_mes_pasado) * 0.19
-        iva_mes_pasado = iva_ventas_mes_pasado - iva_tapas_mes_pasado
-        
-        # Cálculo de utilidad: Ventas - Costos (sin restar IVA, ya que los costos ya incluyen IVA)
+        # Cálculo de utilidad
         utilidad = ventas_mes - costos_reales
-        
-        # Cálculo de utilidad del mes pasado
-        costos_mes_pasado = cuota_camion + (costo_tapa_con_iva * total_bidones_mes_pasado)
-        utilidad_mes_pasado = ventas_mes_pasado - costos_mes_pasado
-        
-        # Cálculo de ticket promedio del mes pasado
-        ticket_promedio_mes_pasado = calcularTicketPromedio(ventas_mes_pasado, len(pedidos_mes_pasado))
-        
-        # Cálculo de clientes activos del mes pasado
-        clientes_activos_mes_pasado = len(pedidos_mes_pasado['usuario'].unique()) if 'usuario' in pedidos_mes_pasado.columns else 0
-        
-        # Cálculo de clientes inactivos del mes pasado (aproximación)
-        clientes_inactivos_mes_pasado = max(0, round(clientes_activos_mes_pasado * 0.2))
         
         # Cálculo punto de equilibrio
         try:
-            # Punto de equilibrio: cuota camión / (precio venta - costo por bidón con IVA)
-            punto_equilibrio = int(round(cuota_camion / (precio_venta_bidon - costo_tapa_con_iva)))
+            punto_equilibrio = int(round(cuota_camion / (2000 - costo_tapa_con_iva)))
         except ZeroDivisionError:
             punto_equilibrio = 0
         
         # Cálculo de capacidad utilizada
-        capacidad_total_litros = 30000  # 30.000 litros por mes
-        litros_vendidos = total_bidones_mes * 20  # Cada bidón = 20 litros
+        capacidad_total_litros = 30000
+        litros_vendidos = total_bidones_mes * 20
         capacidad_utilizada_porcentaje = min(100, (litros_vendidos / capacidad_total_litros) * 100)
         
         # Cálculo clientes activos últimos 2 meses
         clientes_ultimos_2m = pd.concat([pedidos_mes, pedidos_mes_pasado])
         clientes_activos = len(clientes_ultimos_2m['usuario'].unique()) if 'usuario' in clientes_ultimos_2m.columns else 0
         
+        # Calcular porcentaje de cambio
+        cambio_ventas_porcentaje = 0
+        if ventas_mes_pasado > 0:
+            cambio_ventas_porcentaje = round(((ventas_mes - ventas_mes_pasado) / ventas_mes_pasado) * 100, 1)
+        
         resultado = {
             "ventas_mes": int(ventas_mes),
             "ventas_mes_pasado": int(ventas_mes_pasado),
+            "cambio_ventas_porcentaje": cambio_ventas_porcentaje,
             "total_pedidos_mes": len(pedidos_mes),
             "total_pedidos_mes_pasado": len(pedidos_mes_pasado),
             "total_litros_mes": int(total_bidones_mes * 20),
             "litros_vendidos_mes_pasado": int(total_bidones_mes_pasado * 20),
+            "total_bidones_mes": int(total_bidones_mes),
+            "total_bidones_mes_pasado": int(total_bidones_mes_pasado),
             "costos_reales": int(costos_reales),
             "iva": int(iva),
-            "iva_mes_pasado": int(iva_mes_pasado),
             "utilidad": int(utilidad),
-            "utilidad_mes_pasado": int(utilidad_mes_pasado),
-            "ticket_promedio_mes_pasado": int(ticket_promedio_mes_pasado),
-            "clientes_activos_mes_pasado": clientes_activos_mes_pasado,
-            "clientes_inactivos_mes_pasado": clientes_inactivos_mes_pasado,
             "punto_equilibrio": punto_equilibrio,
             "clientes_activos": clientes_activos,
             "capacidad_utilizada": round(capacidad_utilizada_porcentaje, 1),
@@ -407,13 +523,18 @@ def get_kpis():
             "capacidad_total": capacidad_total_litros,
         }
         
-        print("=== RESULTADO KPIs ===")
-        print(resultado)
-        print("=== FIN ENDPOINT KPIs ===")
+        # Calcular tiempo de respuesta
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.info(f"=== RESULTADO KPIs OPTIMIZADO (Tiempo: {duration:.2f}s) ===")
+        logger.info(f"Ventas mes: ${resultado['ventas_mes']:,}")
+        logger.info(f"Total pedidos: {resultado['total_pedidos_mes']}")
+        logger.info(f"Clientes activos: {resultado['clientes_activos']}")
+        logger.info("=== FIN ENDPOINT KPIs OPTIMIZADO ===")
+        
         return resultado
         
     except Exception as e:
-        print(f"Error en cálculo de KPIs: {e}")
+        logger.error(f"Error en cálculo de KPIs: {e}")
         return {
             "ventas_mes": 0,
             "ventas_mes_pasado": 0,
@@ -818,11 +939,11 @@ def get_ventas_totales_historicas():
 
 @app.get("/ventas-historicas", response_model=List[Dict])
 def get_ventas_historicas():
-    """Obtener datos históricos de ventas para gráficos"""
+    """Obtener datos históricos de ventas para gráficos usando nuevo endpoint MongoDB"""
     try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
+        print("Obteniendo ventas históricas usando datos combinados...")
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        print(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
     except Exception as e:
         print("Error al obtener pedidos para ventas históricas:", e)
         return []
@@ -1621,34 +1742,89 @@ def get_ultimas_predicciones(dias: int = Query(7, description="Número de días 
 
 @app.get("/ventas-diarias", response_model=Dict)
 def get_ventas_diarias():
-    """Calcular ventas diarias con comparación mensual y tendencia de 7 días"""
-    # Datos hardcodeados para que funcione
-    return {
-        "ventas_hoy": 22000,
-        "ventas_mismo_dia_mes_anterior": 18000,
-        "porcentaje_cambio": 22.2,
-        "es_positivo": True,
-        "fecha_comparacion": "05-07-2024",
-        "tendencia_7_dias": [
-            {"fecha": "30-07", "ventas": 15000, "dia_semana": "Mar"},
-            {"fecha": "31-07", "ventas": 18000, "dia_semana": "Mie"},
-            {"fecha": "01-08", "ventas": 20000, "dia_semana": "Jue"},
-            {"fecha": "02-08", "ventas": 19000, "dia_semana": "Vie"},
-            {"fecha": "03-08", "ventas": 21000, "dia_semana": "Sab"},
-            {"fecha": "04-08", "ventas": 19500, "dia_semana": "Dom"},
-            {"fecha": "05-08", "ventas": 22000, "dia_semana": "Lun"}
-        ],
-        "tipo_comparacion": "mensual"
-    }
+    """Calcular ventas diarias con comparación mensual y tendencia de 7 días usando nuevo endpoint MongoDB"""
+    try:
+        print("Obteniendo ventas diarias usando datos combinados...")
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        print(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
+        
+        df = pd.DataFrame(pedidos)
+        if 'nombrelocal' in df.columns:
+            df = df[df['nombrelocal'] == 'Aguas Ancud']
+        
+        if df.empty or 'fecha' not in df.columns:
+            return {
+                "ventas_hoy": 0,
+                "ventas_mismo_dia_mes_anterior": 0,
+                "porcentaje_cambio": 0,
+                "es_positivo": True,
+                "fecha_comparacion": "",
+                "tendencia_7_dias": [],
+                "tipo_comparacion": "mensual"
+            }
+        
+        # Convertir fechas y precios
+        df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
+        df['precio'] = pd.to_numeric(df['precio'], errors='coerce').fillna(0)
+        
+        # Obtener fecha máxima de los datos
+        fecha_maxima = df['fecha_parsed'].max()
+        hoy = fecha_maxima.date()
+        
+        # Ventas de hoy
+        ventas_hoy = df[df['fecha_parsed'].dt.date == hoy]['precio'].sum()
+        
+        # Ventas del mismo día del mes anterior
+        mes_anterior = hoy.replace(day=1) - timedelta(days=1)
+        mismo_dia_mes_anterior = hoy.replace(month=mes_anterior.month, year=mes_anterior.year)
+        ventas_mismo_dia_mes_anterior = df[df['fecha_parsed'].dt.date == mismo_dia_mes_anterior]['precio'].sum()
+        
+        # Calcular porcentaje de cambio
+        porcentaje_cambio = 0
+        if ventas_mismo_dia_mes_anterior > 0:
+            porcentaje_cambio = ((ventas_hoy - ventas_mismo_dia_mes_anterior) / ventas_mismo_dia_mes_anterior) * 100
+        
+        # Tendencia de 7 días
+        tendencia_7_dias = []
+        for i in range(7):
+            fecha_tendencia = hoy - timedelta(days=6-i)
+            ventas_dia = df[df['fecha_parsed'].dt.date == fecha_tendencia]['precio'].sum()
+            dia_semana = fecha_tendencia.strftime('%a')
+            tendencia_7_dias.append({
+                "fecha": fecha_tendencia.strftime('%d-%m'),
+                "ventas": int(ventas_dia),
+                "dia_semana": dia_semana
+            })
+        
+        return {
+            "ventas_hoy": int(ventas_hoy),
+            "ventas_mismo_dia_mes_anterior": int(ventas_mismo_dia_mes_anterior),
+            "porcentaje_cambio": round(porcentaje_cambio, 1),
+            "es_positivo": porcentaje_cambio >= 0,
+            "fecha_comparacion": mismo_dia_mes_anterior.strftime('%d-%m-%Y'),
+            "tendencia_7_dias": tendencia_7_dias,
+            "tipo_comparacion": "mensual"
+        }
+        
+    except Exception as e:
+        print(f"Error calculando ventas diarias: {e}")
+        return {
+            "ventas_hoy": 0,
+            "ventas_mismo_dia_mes_anterior": 0,
+            "porcentaje_cambio": 0,
+            "es_positivo": True,
+            "fecha_comparacion": "",
+            "tendencia_7_dias": [],
+            "tipo_comparacion": "mensual"
+        }
 
 @app.get("/ventas-semanales", response_model=Dict)
 def get_ventas_semanales():
-    """Calcular ventas semanales reales"""
+    """Calcular ventas semanales reales usando nuevo endpoint MongoDB"""
     try:
-        # Obtener pedidos usando la función existente
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
+        print("Obteniendo ventas semanales usando datos combinados...")
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        print(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
     except Exception as e:
         print("Error al obtener pedidos para ventas semanales:", e)
         return {
@@ -2311,7 +2487,17 @@ def get_analisis_rentabilidad():
         # Calcular métricas básicas (MISMO MÉTODO QUE KPIs)
         ventas_mes = pedidos_mes['precio'].sum()
         ventas_mes_pasado = pedidos_mes_pasado['precio'].sum()
-        total_bidones_mes = pedidos_mes['cantidad'].sum()
+        
+        # Calcular bidones basado en ordenpedido
+        if 'ordenpedido' in pedidos_mes.columns:
+            total_bidones_mes = pedidos_mes['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        else:
+            total_bidones_mes = len(pedidos_mes)  # Fallback: 1 bidón por pedido
+        
+        if 'ordenpedido' in pedidos_mes_pasado.columns:
+            total_bidones_mes_pasado = pedidos_mes_pasado['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        else:
+            total_bidones_mes_pasado = len(pedidos_mes_pasado)  # Fallback: 1 bidón por pedido
         
         # CÁLCULOS REALES DE COSTOS (MISMO MÉTODO QUE KPIs)
         cuota_camion = 260000  # Costo fijo mensual del camión
@@ -2642,9 +2828,205 @@ def get_analisis_rentabilidad():
         print(f"Error en análisis de rentabilidad: {e}")
         return {"error": f"Error en análisis: {str(e)}"}
 
+@app.get("/ventas-locales", response_model=Dict)
+def get_ventas_locales():
+    """Obtener datos de ventas del local físico (retirolocal = 'si')"""
+    try:
+        print("Obteniendo datos de ventas locales...")
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        print(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
+        
+        df = pd.DataFrame(pedidos)
+        
+        # Filtrar solo ventas del local (retirolocal = 'si')
+        if 'retirolocal' in df.columns:
+            df_local = df[df['retirolocal'] == 'si']
+            print(f"Ventas del local: {len(df_local)} registros")
+        else:
+            print("No se encontró columna 'retirolocal'")
+            return {
+                "ventas_totales": 0,
+                "ventas_mes": 0,
+                "ventas_semana": 0,
+                "ventas_hoy": 0,
+                "bidones_totales": 0,
+                "bidones_mes": 0,
+                "bidones_semana": 0,
+                "bidones_hoy": 0,
+                "ticket_promedio": 0,
+                "metodos_pago": {},
+                "ventas_diarias": [],
+                "ventas_semanales": [],
+                "ventas_mensuales": [],
+                "total_transacciones": 0,
+                "clientes_unicos": 0
+            }
+        
+        if df_local.empty:
+            return {
+                "ventas_totales": 0,
+                "ventas_mes": 0,
+                "ventas_semana": 0,
+                "ventas_hoy": 0,
+                "bidones_totales": 0,
+                "bidones_mes": 0,
+                "bidones_semana": 0,
+                "bidones_hoy": 0,
+                "ticket_promedio": 0,
+                "metodos_pago": {},
+                "ventas_diarias": [],
+                "ventas_semanales": [],
+                "ventas_mensuales": [],
+                "total_transacciones": 0,
+                "clientes_unicos": 0
+            }
+        
+        # Convertir fechas y precios
+        df_local['fecha_parsed'] = df_local['fecha'].apply(parse_fecha)
+        df_local = df_local.dropna(subset=['fecha_parsed'])
+        df_local['precio'] = pd.to_numeric(df_local['precio'], errors='coerce').fillna(0)
+        
+        # Fechas de referencia
+        hoy = datetime.now().date()
+        inicio_mes = hoy.replace(day=1)
+        inicio_semana = hoy - timedelta(days=hoy.weekday())
+        
+        # Filtrar datos por períodos
+        df_mes = df_local[df_local['fecha_parsed'].dt.date >= inicio_mes]
+        df_semana = df_local[df_local['fecha_parsed'].dt.date >= inicio_semana]
+        df_hoy = df_local[df_local['fecha_parsed'].dt.date == hoy]
+        
+        # Calcular métricas
+        ventas_totales = df_local['precio'].sum()
+        ventas_mes = df_mes['precio'].sum()
+        ventas_semana = df_semana['precio'].sum()
+        ventas_hoy = df_hoy['precio'].sum()
+        
+        # Calcular bidones
+        bidones_totales = df_local['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        bidones_mes = df_mes['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        bidones_semana = df_semana['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        bidones_hoy = df_hoy['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+        
+        # Ticket promedio
+        ticket_promedio = df_local['precio'].mean() if len(df_local) > 0 else 0
+        
+        # Métodos de pago
+        metodos_pago = df_local['metodopago'].value_counts().to_dict()
+        
+        # Ventas diarias (últimos 7 días)
+        ventas_diarias = []
+        for i in range(7):
+            fecha = hoy - timedelta(days=6-i)
+            ventas_dia = df_local[df_local['fecha_parsed'].dt.date == fecha]['precio'].sum()
+            bidones_dia = df_local[df_local['fecha_parsed'].dt.date == fecha]['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+            ventas_diarias.append({
+                'fecha': fecha.strftime('%Y-%m-%d'),
+                'ventas': int(ventas_dia),
+                'bidones': int(bidones_dia)
+            })
+        
+        # Ventas semanales (últimas 4 semanas)
+        ventas_semanales = []
+        for i in range(4):
+            inicio_sem = hoy - timedelta(days=(hoy.weekday() + 7*i))
+            fin_sem = inicio_sem + timedelta(days=6)
+            ventas_sem = df_local[
+                (df_local['fecha_parsed'].dt.date >= inicio_sem) & 
+                (df_local['fecha_parsed'].dt.date <= fin_sem)
+            ]['precio'].sum()
+            bidones_sem = df_local[
+                (df_local['fecha_parsed'].dt.date >= inicio_sem) & 
+                (df_local['fecha_parsed'].dt.date <= fin_sem)
+            ]['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+            ventas_semanales.append({
+                'semana': f"Sem {4-i}",
+                'ventas': int(ventas_sem),
+                'bidones': int(bidones_sem)
+            })
+        
+        # Ventas mensuales (últimos 6 meses)
+        ventas_mensuales = []
+        for i in range(6):
+            fecha_mes = hoy.replace(day=1) - timedelta(days=30*i)
+            inicio_mes_calc = fecha_mes.replace(day=1)
+            fin_mes_calc = (inicio_mes_calc + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            ventas_mes_calc = df_local[
+                (df_local['fecha_parsed'].dt.date >= inicio_mes_calc) & 
+                (df_local['fecha_parsed'].dt.date <= fin_mes_calc)
+            ]['precio'].sum()
+            bidones_mes_calc = df_local[
+                (df_local['fecha_parsed'].dt.date >= inicio_mes_calc) & 
+                (df_local['fecha_parsed'].dt.date <= fin_mes_calc)
+            ]['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
+            ventas_mensuales.append({
+                'mes': fecha_mes.strftime('%b'),
+                'ventas': int(ventas_mes_calc),
+                'bidones': int(bidones_mes_calc)
+            })
+        
+        return {
+            "ventas_totales": int(ventas_totales),
+            "ventas_mes": int(ventas_mes),
+            "ventas_semana": int(ventas_semana),
+            "ventas_hoy": int(ventas_hoy),
+            "bidones_totales": int(bidones_totales),
+            "bidones_mes": int(bidones_mes),
+            "bidones_semana": int(bidones_semana),
+            "bidones_hoy": int(bidones_hoy),
+            "ticket_promedio": int(ticket_promedio),
+            "metodos_pago": metodos_pago,
+            "ventas_diarias": ventas_diarias,
+            "ventas_semanales": ventas_semanales,
+            "ventas_mensuales": ventas_mensuales,
+            "total_transacciones": len(df_local),
+            "clientes_unicos": len(df_local['usuario'].unique()) if 'usuario' in df_local.columns else 0
+        }
+        
+    except Exception as e:
+        print(f"Error obteniendo ventas locales: {e}")
+        return {
+            "ventas_totales": 0,
+            "ventas_mes": 0,
+            "ventas_semana": 0,
+            "ventas_hoy": 0,
+            "bidones_totales": 0,
+            "bidones_mes": 0,
+            "bidones_semana": 0,
+            "bidones_hoy": 0,
+            "ticket_promedio": 0,
+            "metodos_pago": {},
+            "ventas_diarias": [],
+            "ventas_semanales": [],
+            "ventas_mensuales": [],
+            "total_transacciones": 0,
+            "clientes_unicos": 0
+        }
+
 @app.get("/test")
 def test_endpoint():
     return {"message": "Server is working", "ventas_hoy": 22000}
+
+@app.get("/ventas-locales-test", response_model=Dict)
+def get_ventas_locales_test():
+    """Endpoint de prueba para ventas locales"""
+    return {
+        "ventas_totales": 156000,
+        "ventas_mes": 45000,
+        "ventas_semana": 12000,
+        "ventas_hoy": 2000,
+        "bidones_totales": 78,
+        "bidones_mes": 22,
+        "bidones_semana": 6,
+        "bidones_hoy": 1,
+        "ticket_promedio": 2000,
+        "metodos_pago": {"efectivo": 15, "transferencia": 8, "tarjeta": 3},
+        "ventas_diarias": [],
+        "ventas_semanales": [],
+        "ventas_mensuales": [],
+        "total_transacciones": 26,
+        "clientes_unicos": 15
+    }
 
 if __name__ == "__main__":
     import uvicorn
