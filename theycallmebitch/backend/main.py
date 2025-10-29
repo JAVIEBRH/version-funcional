@@ -29,20 +29,24 @@ import os
 # Obtener origen permitido desde variable de entorno o usar valor por defecto
 CORS_ORIGIN = os.getenv("CORS_ORIGIN", "http://localhost:5173")
 
+# Lista completa de orígenes permitidos
+ALLOWED_ORIGINS = [
+    CORS_ORIGIN, 
+    "http://localhost:5173", 
+    "http://localhost:5174", 
+    "http://localhost:5175", 
+    "http://localhost:3000",
+    "https://dashboard-aguas-ancud-frontend-v2.onrender.com",
+    "https://frontenddashboard-opqq.onrender.com"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        CORS_ORIGIN, 
-        "http://localhost:5173", 
-        "http://localhost:5174", 
-        "http://localhost:5175", 
-        "http://localhost:3000",
-        "https://dashboard-aguas-ancud-frontend-v2.onrender.com",
-        "https://frontenddashboard-opqq.onrender.com"
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 ENDPOINT_CLIENTES = "https://fluvi.cl/fluviDos/GoApp/endpoints/clientes.php"
