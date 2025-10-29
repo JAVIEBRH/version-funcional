@@ -54,7 +54,8 @@ const RentabilidadCard = () => {
   const fetchRentabilidadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/rentabilidad/avanzado');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+      const response = await fetch(`${API_URL}/rentabilidad/avanzado`);
       if (response.ok) {
         const data = await response.json();
         setRentabilidadData(data);

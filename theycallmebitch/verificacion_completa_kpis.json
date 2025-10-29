@@ -1,0 +1,158 @@
+{
+  "fecha_verificacion": "2025-10-23T22:09:17.060027",
+  "datos_endpoint": {
+    "ventas_mes": 880000,
+    "ventas_mes_pasado": 865000,
+    "cambio_ventas_porcentaje": 1.7,
+    "total_pedidos_mes": 141,
+    "total_pedidos_mes_pasado": 145,
+    "total_litros_mes": 8360,
+    "litros_vendidos_mes_pasado": 8320,
+    "total_bidones_mes": 418,
+    "total_bidones_mes_pasado": 416,
+    "cambio_bidones_porcentaje": 0.5,
+    "costos_reales": 285368,
+    "iva": 163149,
+    "iva_mes_pasado": 160318,
+    "utilidad": 594631,
+    "utilidad_mes_pasado": 579752,
+    "ticket_promedio_mes_pasado": 5965,
+    "clientes_activos_mes_pasado": 106,
+    "clientes_inactivos_mes_pasado": 21,
+    "punto_equilibrio": 134,
+    "clientes_activos": 145,
+    "capacidad_utilizada": 27.9,
+    "litros_vendidos": 8360,
+    "capacidad_total": 30000
+  },
+  "calculos_manuales": {
+    "ventas_mes": "880000",
+    "ventas_mes_pasado": "865000",
+    "total_pedidos_mes": 141,
+    "total_pedidos_mes_pasado": 145,
+    "total_bidones_mes": "418",
+    "total_bidones_mes_pasado": "416",
+    "total_litros_mes": "8360",
+    "costos_reales": 285368.42,
+    "iva": 163149.58,
+    "utilidad": 594631.5800000001,
+    "clientes_activos": 110,
+    "capacidad_utilizada": 27.866666666666667,
+    "cambio_ventas_porcentaje": 1.7341040462427744,
+    "cambio_bidones_porcentaje": 0.4807692307692308
+  },
+  "comparaciones": [
+    {
+      "metrica": "Ventas Mes",
+      "endpoint": 880000,
+      "manual": "880000",
+      "diferencia": "0",
+      "porcentaje_diferencia": 0.0,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Ventas Mes Pasado",
+      "endpoint": 865000,
+      "manual": "865000",
+      "diferencia": "0",
+      "porcentaje_diferencia": 0.0,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Total Pedidos Mes",
+      "endpoint": 141,
+      "manual": 141,
+      "diferencia": 0,
+      "porcentaje_diferencia": 0.0,
+      "coincide": true
+    },
+    {
+      "metrica": "Total Pedidos Mes Pasado",
+      "endpoint": 145,
+      "manual": 145,
+      "diferencia": 0,
+      "porcentaje_diferencia": 0.0,
+      "coincide": true
+    },
+    {
+      "metrica": "Total Bidones Mes",
+      "endpoint": 418,
+      "manual": "418",
+      "diferencia": "0",
+      "porcentaje_diferencia": 0.0,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Total Bidones Mes Pasado",
+      "endpoint": 416,
+      "manual": "416",
+      "diferencia": "0",
+      "porcentaje_diferencia": 0.0,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Total Litros Mes",
+      "endpoint": 8360,
+      "manual": "8360",
+      "diferencia": "0",
+      "porcentaje_diferencia": 0.0,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Costos Reales",
+      "endpoint": 285368,
+      "manual": 285368.42,
+      "diferencia": 0.41999999998370185,
+      "porcentaje_diferencia": 0.00014717816357665012,
+      "coincide": "True"
+    },
+    {
+      "metrica": "IVA",
+      "endpoint": 163149,
+      "manual": 163149.58,
+      "diferencia": 0.5799999999871943,
+      "porcentaje_diferencia": 0.0003555019877999038,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Utilidad",
+      "endpoint": 594631,
+      "manual": 594631.5800000001,
+      "diferencia": 0.5800000000745058,
+      "porcentaje_diferencia": 9.753938734207587e-05,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Clientes Activos",
+      "endpoint": 145,
+      "manual": 110,
+      "diferencia": 35,
+      "porcentaje_diferencia": 31.818181818181817,
+      "coincide": false
+    },
+    {
+      "metrica": "Capacidad Utilizada",
+      "endpoint": 27.9,
+      "manual": 27.866666666666667,
+      "diferencia": 0.03333333333333144,
+      "porcentaje_diferencia": 0.11961722488037599,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Cambio Ventas %",
+      "endpoint": 1.7,
+      "manual": 1.7341040462427744,
+      "diferencia": 0.03410404624277441,
+      "porcentaje_diferencia": 1.966666666666658,
+      "coincide": "True"
+    },
+    {
+      "metrica": "Cambio Bidones %",
+      "endpoint": 0.5,
+      "manual": 0.4807692307692308,
+      "diferencia": 0.019230769230769218,
+      "porcentaje_diferencia": 3.9999999999999973,
+      "coincide": "True"
+    }
+  ]
+}

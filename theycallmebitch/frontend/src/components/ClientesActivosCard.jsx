@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Typography } from '@mui/material';
+import { formatClients } from '../utils/formatters';
 
 const ClientesActivosCard = ({ 
   title = 'Clientes Activos', 
@@ -42,7 +43,7 @@ const ClientesActivosCard = ({
           color: '#1e293b'
         }}
       >
-        {value.toLocaleString('es-CL')}
+        {formatClients(value).replace(' clientes', '')}
       </Typography>
       <Typography 
         variant="caption" 
@@ -58,4 +59,4 @@ const ClientesActivosCard = ({
   );
 };
 
-export default ClientesActivosCard; 
+export default memo(ClientesActivosCard); 

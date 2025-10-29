@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -36,6 +36,8 @@ const ChartCard = ({ title, data, type = 'line', height = 300 }) => {
               stroke="#667eea" 
               strokeWidth={3}
               dot={{ fill: '#667eea', strokeWidth: 2, r: 4 }}
+              tension={0.3}
+              animationDuration={300}
             />
           </LineChart>
         );
@@ -100,4 +102,4 @@ const ChartCard = ({ title, data, type = 'line', height = 300 }) => {
   );
 };
 
-export default ChartCard; 
+export default memo(ChartCard); 

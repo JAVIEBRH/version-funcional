@@ -1,36 +1,24 @@
+#!/usr/bin/env python3
+"""
+Script de prueba simple para verificar que el servidor funcione
+"""
+
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-app = FastAPI(title="Test API", version="1.0")
+# Crear una app simple de prueba
+app = FastAPI(title="Test Server")
 
-# Configuración de CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.get("/")
+def read_root():
+    return {"message": "Servidor funcionando correctamente"}
 
 @app.get("/test")
 def test_endpoint():
-    return {"message": "Server is working", "status": "OK"}
-
-@app.get("/kpis")
-def get_kpis():
-    return {
-        "ventas_mes": 150000,
-        "ventas_mes_pasado": 120000,
-        "total_pedidos_mes": 75,
-        "total_pedidos_mes_pasado": 60,
-        "total_litros_mes": 1500,
-        "litros_vendidos_mes_pasado": 1200,
-        "costos_reales": 80000,
-        "iva": 15000,
-        "punto_equilibrio": 40,
-        "clientes_activos": 45
-    }
+    return {"status": "OK", "message": "Backend funcionando"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
+    print("🚀 Iniciando servidor de prueba...")
+    print("📍 URL: http://localhost:8001")
+    print("🧪 Test: http://localhost:8001/test")
+    uvicorn.run(app, host="127.0.0.1", port=8001)

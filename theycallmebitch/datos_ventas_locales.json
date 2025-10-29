@@ -1,0 +1,261 @@
+﻿{
+    "status":  "success",
+    "message":  "Datos extra??dos correctamente",
+    "total_registros":  28,
+    "fecha_consulta":  "2025-10-23 22:28:06",
+    "tabla":  "eventalocal",
+    "data":  [
+                 {
+                     "id":  "37",
+                     "idventa":  "70741583_1754866716",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "transferencia",
+                     "fecha":  "10-08-2025",
+                     "hora":  "18:58:36"
+                 },
+                 {
+                     "id":  "36",
+                     "idventa":  "1497464335_1754866701",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "transferencia",
+                     "fecha":  "10-08-2025",
+                     "hora":  "18:58:21"
+                 },
+                 {
+                     "id":  "35",
+                     "idventa":  "1699770769_1754755488",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "09-08-2025",
+                     "hora":  "12:04:48"
+                 },
+                 {
+                     "id":  "34",
+                     "idventa":  "1610617839_1745971377",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "transferencia",
+                     "fecha":  "29-04-2025",
+                     "hora":  "20:02:57"
+                 },
+                 {
+                     "id":  "33",
+                     "idventa":  "736716212_1745971366",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "tarjeta",
+                     "fecha":  "29-04-2025",
+                     "hora":  "20:02:46"
+                 },
+                 {
+                     "id":  "32",
+                     "idventa":  "1334748283_1745971356",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "10000",
+                     "metodopago":  "tarjeta",
+                     "fecha":  "29-04-2025",
+                     "hora":  "20:02:36"
+                 },
+                 {
+                     "id":  "31",
+                     "idventa":  "1656162059_1745971340",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "transferencia",
+                     "fecha":  "29-04-2025",
+                     "hora":  "20:02:20"
+                 },
+                 {
+                     "id":  "30",
+                     "idventa":  "1549994446_1745967179",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "10000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "29-04-2025",
+                     "hora":  "18:52:59"
+                 },
+                 {
+                     "id":  "29",
+                     "idventa":  "429190979_1743901376",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "tarjeta",
+                     "fecha":  "05-04-2025",
+                     "hora":  "22:02:56"
+                 },
+                 {
+                     "id":  "28",
+                     "idventa":  "397553717_1743802989",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "04-04-2025",
+                     "hora":  "18:43:09"
+                 },
+                 {
+                     "id":  "27",
+                     "idventa":  "389737222_1743792016",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "04-04-2025",
+                     "hora":  "15:40:16"
+                 },
+                 {
+                     "id":  "26",
+                     "idventa":  "2060626962_1743452895",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "9000",
+                     "metodopago":  "transferencia",
+                     "fecha":  "31-03-2025",
+                     "hora":  "17:28:15"
+                 },
+                 {
+                     "id":  "25",
+                     "idventa":  "924156077_1743452875",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "31-03-2025",
+                     "hora":  "17:27:55"
+                 },
+                 {
+                     "id":  "24",
+                     "idventa":  "1029738917_1743107034",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "transferencia",
+                     "fecha":  "27-03-2025",
+                     "hora":  "17:23:54"
+                 },
+                 {
+                     "id":  "23",
+                     "idventa":  "2112403964_1743107024",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "27-03-2025",
+                     "hora":  "17:23:44"
+                 },
+                 {
+                     "id":  "22",
+                     "idventa":  "987520140_1741737935",
+                     "local":  "cesarabel44@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "11-03-2025",
+                     "hora":  "21:05:35"
+                 },
+                 {
+                     "id":  "21",
+                     "idventa":  "1722769258_1741303409",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "06-03-2025",
+                     "hora":  "20:23:29"
+                 },
+                 {
+                     "id":  "20",
+                     "idventa":  "1603054579_1741302974",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "06-03-2025",
+                     "hora":  "20:16:14"
+                 },
+                 {
+                     "id":  "19",
+                     "idventa":  "1515427939_1741302889",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "tarjeta",
+                     "fecha":  "06-03-2025",
+                     "hora":  "20:14:49"
+                 },
+                 {
+                     "id":  "18",
+                     "idventa":  "460913526_1741302847",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "tarjeta",
+                     "fecha":  "06-03-2025",
+                     "hora":  "20:14:07"
+                 },
+                 {
+                     "id":  "17",
+                     "idventa":  "2109583321_1741214932",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "05-03-2025",
+                     "hora":  "19:48:52"
+                 },
+                 {
+                     "id":  "16",
+                     "idventa":  "38931227_1741214920",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "05-03-2025",
+                     "hora":  "19:48:40"
+                 },
+                 {
+                     "id":  "15",
+                     "idventa":  "1712821250_1741214911",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "05-03-2025",
+                     "hora":  "19:48:31"
+                 },
+                 {
+                     "id":  "14",
+                     "idventa":  "2112848111_1741214886",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "4000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "05-03-2025",
+                     "hora":  "19:48:06"
+                 },
+                 {
+                     "id":  "13",
+                     "idventa":  "769579015_1741208991",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "6000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "05-03-2025",
+                     "hora":  "18:09:51"
+                 },
+                 {
+                     "id":  "12",
+                     "idventa":  "2092458959_1741184149",
+                     "local":  "cesar.barahona.b@gmail.com",
+                     "precio":  "5000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "05-03-2025",
+                     "hora":  "11:15:49"
+                 },
+                 {
+                     "id":  "3",
+                     "idventa":  "1890865122_1726445859",
+                     "local":  "cesarabel44@gmail.com",
+                     "precio":  "4000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "15-09-2024",
+                     "hora":  "21:17:39"
+                 },
+                 {
+                     "id":  "2",
+                     "idventa":  "1389005777_1726445752",
+                     "local":  "cesarabel44@gmail.com",
+                     "precio":  "8000",
+                     "metodopago":  "efectivo",
+                     "fecha":  "29-10-2024",
+                     "hora":  "21:15:52"
+                 }
+             ]
+}

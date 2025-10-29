@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useTheme } from '@mui/material/styles';
+import { formatCurrency, formatNumber } from '../utils/formatters';
 
 const FinancialKpiCard = ({ 
   title = 'Ticket Promedio', 
@@ -14,9 +15,9 @@ const FinancialKpiCard = ({
   const formatValue = (val) => {
     // Solo agregar $ si el título es "Ticket Promedio"
     if (title === 'Ticket Promedio') {
-      return `$${val.toLocaleString('es-CL')}`;
+      return formatCurrency(val);
     }
-    return val.toLocaleString('es-CL');
+    return formatNumber(val);
   };
 
   return (
@@ -136,4 +137,4 @@ const FinancialKpiCard = ({
   );
 };
 
-export default FinancialKpiCard; 
+export default memo(FinancialKpiCard); 

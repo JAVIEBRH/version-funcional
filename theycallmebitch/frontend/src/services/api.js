@@ -2,7 +2,7 @@
 // Funciones para consumir la API del backend (FastAPI)
 
 // URL dinámica que funciona en desarrollo y producción
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backenddashboard-vh7d.onrender.com';
 
 // Log para debugging
 console.log('API_URL configurada:', API_URL);
@@ -19,6 +19,22 @@ export async function getPedidos() {
     return data;
   } catch (error) {
     console.error('Error obteniendo pedidos:', error);
+    throw error;
+  }
+}
+
+export async function getPedidosV2() {
+  try {
+    console.log('Intentando obtener pedidos v2 desde:', `${API_URL}/pedidos-v2`);
+    const res = await fetch(`${API_URL}/pedidos-v2`);
+    if (!res.ok) {
+      throw new Error(`Error ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json();
+    console.log('Pedidos v2 obtenidos exitosamente:', data.length, 'registros');
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo pedidos v2:', error);
     throw error;
   }
 }
@@ -348,5 +364,21 @@ export const getAnalisisRentabilidad = async () => {
     return { error: 'Error obteniendo análisis' };
   }
 };
+
+export async function getVentasLocales() {
+  try {
+    console.log('Intentando obtener ventas locales desde:', `${API_URL}/ventas-locales`);
+    const res = await fetch(`${API_URL}/ventas-locales`);
+    if (!res.ok) {
+      throw new Error(`Error ${res.status}: ${res.statusText}`);
+    }
+    const data = await res.json();
+    console.log('Ventas locales obtenidas exitosamente:', data);
+    return data;
+  } catch (error) {
+    console.error('Error obteniendo ventas locales:', error);
+    throw error;
+  }
+}
 
  

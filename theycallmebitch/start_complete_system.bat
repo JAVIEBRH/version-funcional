@@ -14,7 +14,7 @@ if errorlevel 1 (
 
 echo [2/3] Iniciando Backend (Puerto 8001)...
 cd backend
-start "Backend - Aguas Ancud" cmd /k "python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
+start "Backend - Aguas Ancud" cmd /k "python main.py"
 
 echo [3/3] Iniciando Frontend (Puerto 5173)...
 cd ..\frontend

@@ -1,16 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline, Box } from '@mui/material';
+import { CssBaseline, Box, CircularProgress } from '@mui/material';
 import Sidebar from './components/Sidebar';
 import Home from './pages/Home';
 import Pedidos from './pages/Pedidos';
 import Clientes from './pages/Clientes';
-import MapaCalor from './pages/MapaCalor';
-import Predictor from './pages/Predictor';
-import Local from './pages/Local';
 import { RefreshProvider, useRefresh } from './context/RefreshContext';
 import './App.css';
+
+// Lazy loading para páginas pesadas
+const MapaCalor = lazy(() => import('./pages/MapaCalor'));
+const Predictor = lazy(() => import('./pages/Predictor'));
+const Local = lazy(() => import('./pages/Local'));
+
+// Componente de loading para Suspense
+const LoadingSpinner = () => (
+  <Box 
+    display="flex" 
+    justifyContent="center" 
+    alignItems="center" 
+    minHeight="50vh"
+  >
+    <CircularProgress size={60} />
+  </Box>
+);
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -220,9 +234,30 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/pedidos" element={<Pedidos />} />
             <Route path="/clientes" element={<Clientes />} />
-            <Route path="/mapa-calor" element={<MapaCalor />} />
-            <Route path="/predictor" element={<Predictor />} />
-            <Route path="/local" element={<Local />} />
+            <Route 
+              path="/mapa-calor" 
+              element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <MapaCalor />
+                </Suspense>
+              } 
+            />
+            <Route 
+              path="/predictor" 
+              element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Predictor />
+                </Suspense>
+              } 
+            />
+            <Route 
+              path="/local" 
+              element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <Local />
+                </Suspense>
+              } 
+            />
           </Routes>
         </Box>
       </Box>

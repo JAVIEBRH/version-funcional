@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField, InputAdornment, Chip, Button, useTheme } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import { getPedidos } from '../services/api';
+import { getPedidos, getPedidosV2 } from '../services/api';
 import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
@@ -11,7 +11,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   const theme = useTheme();
   const [pedidos, setPedidos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // Fecha actual por defecto
+  const [selectedDate, setSelectedDate] = useState('2025-09-01'); // Fecha con datos por defecto
   const [pagina, setPagina] = useState(1);
   const pedidosPorPagina = 10;
   
@@ -19,12 +19,16 @@ export default function Pedidos({ refreshTrigger = 0 }) {
 
   const cargarPedidos = async () => {
     try {
+      // Usar el endpoint principal que ahora apunta al nuevo endpoint MongoDB
       const data = await getPedidos();
+      console.log('Usando endpoint principal con datos MongoDB');
+      
       // Ordenar del más reciente al más antiguo
       const pedidosOrdenados = [...data].sort((a, b) => {
-        const fa = parseFecha(a.fecha);
-        const fb = parseFecha(b.fecha);
-        return fb - fa;
+        const fa = parseFecha(a.fecha || a.createdAt);
+        const fb = parseFecha(b.fecha || b.createdAt);
+        if (!fa || !fb) return 0;
+        return fb.getTime() - fa.getTime(); // Más reciente primero
       });
       setPedidos(pedidosOrdenados);
       console.log('Pedidos actualizados:', new Date().toLocaleTimeString());
@@ -60,16 +64,10 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   // Definir fecha seleccionada al principio
   const fechaSeleccionada = selectedDate; // Formato YYYY-MM-DD
 
-  // Filtro de búsqueda que incluye fecha seleccionada
+  // Filtro de búsqueda SIN filtro de fecha temporalmente
   const filteredPedidos = pedidos.filter(p => {
-    // Primero filtrar por fecha seleccionada
-    const fechaPedido = parseFecha(p.fecha);
-    if (!fechaPedido) return false;
-    const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
-    if (fechaPedidoStr !== fechaSeleccionada) return false;
-    
-    // Luego aplicar filtro de búsqueda
-    const texto = `${p.fecha || ''} ${p.dire || ''} ${p.usuario || ''} ${p.precio || ''} ${p.status || ''}`.toLowerCase();
+    // Solo aplicar filtro de búsqueda (compatible con ambos esquemas)
+    const texto = `${p.fecha || p.createdAt || ''} ${p.dire || p.customer?.address || ''} ${p.usuario || p.customer?.name || ''} ${p.precio || p.price || ''} ${p.status || ''}`.toLowerCase();
     return texto.includes(searchTerm.toLowerCase());
   });
 
@@ -80,15 +78,27 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   const pedidosPagina = filteredPedidos.slice((pagina - 1) * pedidosPorPagina, pagina * pedidosPorPagina);
   useEffect(() => { setPagina(1); }, [searchTerm]);
 
-  // Función para parsear fechas DD-MM-YYYY a Date
+  // Función para parsear fechas DD-MM-YYYY a Date o ISO string
   function parseFecha(fechaStr) {
     if (!fechaStr) return null;
-    if (/\d{4}-\d{2}-\d{2}/.test(fechaStr)) return new Date(fechaStr);
+    
+    // Si es formato ISO (nuevo esquema)
+    if (/\d{4}-\d{2}-\d{2}T/.test(fechaStr)) {
+      return new Date(fechaStr);
+    }
+    
+    // Si es formato YYYY-MM-DD
+    if (/\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
+      return new Date(fechaStr);
+    }
+    
+    // Si es formato DD-MM-YYYY (esquema legacy)
     const match = fechaStr.match(/(\d{2})-(\d{2})-(\d{4})/);
     if (match) {
       const [_, d, m, y] = match;
       return new Date(`${y}-${m}-${d}`);
     }
+    
     return null;
   }
 
@@ -144,7 +154,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   
   // Calcular pedidos y bidones de la FECHA SELECCIONADA usando TODOS los pedidos (no filtrados)
   const pedidosFechaSeleccionada = pedidos.filter(p => {
-    const fechaPedido = parseFecha(p.fecha);
+    const fechaPedido = parseFecha(p.fecha || p.createdAt);
     if (!fechaPedido) return false;
     const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
     return fechaPedidoStr === fechaSeleccionada;
@@ -152,7 +162,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   
   // Calcular bidones vendidos en la fecha seleccionada usando TODOS los pedidos
   const pedidosFechaSeleccionadaData = pedidos.filter(p => {
-    const fechaPedido = parseFecha(p.fecha);
+    const fechaPedido = parseFecha(p.fecha || p.createdAt);
     if (!fechaPedido) return false;
     const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
     return fechaPedidoStr === fechaSeleccionada;
@@ -161,27 +171,30 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   const bidonesFechaSeleccionada = pedidosFechaSeleccionadaData.reduce((sum, p) => {
     let cantidad = 1;
     
-
-    
-    // Primero intentar obtener cantidad de campos específicos
-    if (p.cantidad) cantidad = Number(p.cantidad);
-    else if (p.cant) cantidad = Number(p.cant);
-    else if (p.qty) cantidad = Number(p.qty);
-    else if (p.quantity) cantidad = Number(p.quantity);
-    else if (p.bidones) cantidad = Number(p.bidones);
-    else if (p.unidades) cantidad = Number(p.unidades);
-    else cantidad = NaN; // Si no hay ningún campo, forzar NaN
-    
-    // Si no hay campo de cantidad específica, calcular basándose en el precio
-    if (isNaN(cantidad) || cantidad <= 0) {
-      const precio = Number(p.precio) || 0;
-      // Calcular bidones basándose en el precio real ($2,000 por bidón)
-      if (precio > 0) {
-        cantidad = Math.ceil(precio / 2000); // $2,000 por bidón
+    // Nuevo esquema: usar products array
+    if (p.products && Array.isArray(p.products)) {
+      cantidad = p.products.reduce((total, product) => total + (product.quantity || 1), 0);
+    } else {
+      // Esquema legacy: intentar obtener cantidad de campos específicos
+      if (p.cantidad) cantidad = Number(p.cantidad);
+      else if (p.cant) cantidad = Number(p.cant);
+      else if (p.qty) cantidad = Number(p.qty);
+      else if (p.quantity) cantidad = Number(p.quantity);
+      else if (p.bidones) cantidad = Number(p.bidones);
+      else if (p.unidades) cantidad = Number(p.unidades);
+      else cantidad = NaN; // Si no hay ningún campo, forzar NaN
+      
+      // Si no hay campo de cantidad específica, calcular basándose en el precio
+      if (isNaN(cantidad) || cantidad <= 0) {
+        const precio = Number(p.precio || p.price) || 0;
+        // Calcular bidones basándose en el precio real ($2,000 por bidón)
+        if (precio > 0) {
+          cantidad = Math.ceil(precio / 2000); // $2,000 por bidón
+        }
       }
     }
     
-    return sum + cantidad; // Removido Math.max(1, cantidad) para usar el cálculo real
+    return sum + cantidad;
   }, 0);
   
 
@@ -416,7 +429,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                   <TableRow key={i} sx={{ '&:hover': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' } }}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ bgcolor: '#3b82f6' }}>{(p.usuario || '?').charAt(0)}</Avatar>
+                        <Avatar sx={{ bgcolor: '#3b82f6' }}>{(p.usuario || p.customer?.name || '?').charAt(0)}</Avatar>
                         <Box>
                           <Typography variant="body1" sx={{ 
                             fontWeight: 600, 
@@ -425,7 +438,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                             WebkitFontSmoothing: 'antialiased',
                             MozOsxFontSmoothing: 'grayscale',
                             textRendering: 'optimizeLegibility'
-                          }}>{p.usuario || '-'}</Typography>
+                          }}>{p.usuario || p.customer?.name || '-'}</Typography>
                           <Typography variant="body2" sx={{ 
                             color: 'text.secondary', 
                             fontWeight: 600,
@@ -433,7 +446,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                             WebkitFontSmoothing: 'antialiased',
                             MozOsxFontSmoothing: 'grayscale',
                             textRendering: 'optimizeLegibility'
-                          }}>ID: {p.id || i + 1}</Typography>
+                          }}>ID: {p.id || p._id || i + 1}</Typography>
                         </Box>
                       </Box>
                     </TableCell>
@@ -443,14 +456,14 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                       WebkitFontSmoothing: 'antialiased',
                       MozOsxFontSmoothing: 'grayscale',
                       textRendering: 'optimizeLegibility'
-                    }}>{p.dire || '-'}</TableCell>
+                    }}>{p.dire || p.customer?.address || '-'}</TableCell>
                     <TableCell sx={{ 
                       color: 'text.primary',
                       fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                       WebkitFontSmoothing: 'antialiased',
                       MozOsxFontSmoothing: 'grayscale',
                       textRendering: 'optimizeLegibility'
-                    }}>{p.fecha || '-'}</TableCell>
+                    }}>{p.fecha || (p.createdAt ? new Date(p.createdAt).toLocaleDateString('es-CL') : '-')}</TableCell>
                     <TableCell sx={{ 
                       color: 'text.primary',
                       fontWeight: 600,
@@ -458,14 +471,14 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                       WebkitFontSmoothing: 'antialiased',
                       MozOsxFontSmoothing: 'grayscale',
                       textRendering: 'optimizeLegibility'
-                    }}>${p.precio ? Number(p.precio).toLocaleString() : 0}</TableCell>
+                    }}>${(p.precio || p.price || 0).toLocaleString()}</TableCell>
                     <TableCell sx={{ 
                       color: 'text.primary',
                       fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
                       WebkitFontSmoothing: 'antialiased',
                       MozOsxFontSmoothing: 'grayscale',
                       textRendering: 'optimizeLegibility'
-                    }}>{p.metodopago || '-'}</TableCell>
+                    }}>{p.metodopago || p.paymentMethod || '-'}</TableCell>
                     <TableCell>
                       <Chip 
                         label={getEstadoStyle(p.status).label}

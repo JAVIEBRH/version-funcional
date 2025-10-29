@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Typography, Box } from '@mui/material';
 
@@ -53,11 +53,47 @@ const CircularProgressBar = ({ value, size = 120, stroke = 10, color = '#3b82f6'
 
 const KpiMetaCard = ({
   value = 75,
+  currentValue = 0,
+  targetValue = 500000,
+  percentage = 0,
   title = 'Meta de Ventas',
   subtitle = 'Objetivo Mensual',
   description = 'Progreso respecto a la meta establecida para este mes.'
 }) => {
   const theme = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [metaData, setMetaData] = useState({
+    ventasActuales: 0,
+    meta: 500000, // Meta fija de $500,000
+    porcentajeCumplimiento: 0,
+    faltante: 0
+  });
+
+  useEffect(() => {
+    // Usar los datos pasados como props en lugar de hacer fetch
+    const meta = targetValue;
+    const ventasActuales = currentValue;
+    const porcentajeCumplimiento = percentage;
+    const faltante = meta - ventasActuales;
+
+    setMetaData({
+      ventasActuales,
+      meta,
+      porcentajeCumplimiento,
+      faltante
+    });
+    setLoading(false);
+  }, [currentValue, targetValue, percentage]);
+
+  const formatValue = (val) => {
+    if (val >= 1000000) {
+      return `$${(val / 1000000).toFixed(1)}M`;
+    } else if (val >= 1000) {
+      return `$${(val / 1000).toFixed(1)}K`;
+    } else {
+      return `$${val.toLocaleString('es-CL')}`;
+    }
+  };
   
   // Determinar el color según el progreso
   const getProgressColor = (progress) => {
@@ -69,7 +105,34 @@ const KpiMetaCard = ({
     return '#047857'; // Verde muy oscuro para >120%
   };
 
-  const progressColor = getProgressColor(value);
+  const progressColor = getProgressColor(metaData.porcentajeCumplimiento);
+  
+  if (loading) {
+    return (
+      <Box sx={{
+        background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
+          : 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%)',
+        borderRadius: 4,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        padding: 3,
+        minWidth: 'auto',
+        maxWidth: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: `1px solid ${theme.palette.mode === 'dark' 
+          ? 'rgba(255,255,255,0.08)' 
+          : 'rgba(0,0,0,0.08)'}`,
+        minHeight: 200
+      }}>
+        <Typography variant="body2" sx={{ color: '#9370db' }}>
+          Cargando meta de ventas...
+        </Typography>
+      </Box>
+    );
+  }
   
   return (
     <Box sx={{
@@ -99,13 +162,13 @@ const KpiMetaCard = ({
         left: '-50%',
         width: '200%',
         height: '200%',
-        background: value < 60 ? 
+        background: metaData.porcentajeCumplimiento < 60 ? 
           'linear-gradient(45deg, transparent, rgba(239, 68, 68, 0.6), transparent, rgba(239, 68, 68, 0.6), transparent)' :
-          value < 80 ? 
+          metaData.porcentajeCumplimiento < 80 ? 
           'linear-gradient(45deg, transparent, rgba(245, 158, 11, 0.6), transparent, rgba(245, 158, 11, 0.6), transparent)' :
           'linear-gradient(45deg, transparent, rgba(34, 197, 94, 0.6), transparent, rgba(34, 197, 94, 0.6), transparent)',
-        animation: value < 60 ? 'glowWaveRed 5s ease-in-out infinite' :
-                   value < 80 ? 'glowWaveYellow 5s ease-in-out infinite' :
+        animation: metaData.porcentajeCumplimiento < 60 ? 'glowWaveRed 5s ease-in-out infinite' :
+                   metaData.porcentajeCumplimiento < 80 ? 'glowWaveYellow 5s ease-in-out infinite' :
                    'glowWaveGreen 5s ease-in-out infinite',
         zIndex: 0
       },
@@ -117,13 +180,13 @@ const KpiMetaCard = ({
         right: 0,
         bottom: 0,
         borderRadius: 4,
-        boxShadow: value < 60 ? 
+        boxShadow: metaData.porcentajeCumplimiento < 60 ? 
           '0 0 30px rgba(239, 68, 68, 0.8), 0 0 60px rgba(239, 68, 68, 0.6)' :
-          value < 80 ? 
+          metaData.porcentajeCumplimiento < 80 ? 
           '0 0 30px rgba(245, 158, 11, 0.8), 0 0 60px rgba(245, 158, 11, 0.6)' :
           '0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.6)',
-        animation: value < 60 ? 'glowPulseRed 4s ease-in-out infinite' :
-                   value < 80 ? 'glowPulseYellow 4s ease-in-out infinite' :
+        animation: metaData.porcentajeCumplimiento < 60 ? 'glowPulseRed 4s ease-in-out infinite' :
+                   metaData.porcentajeCumplimiento < 80 ? 'glowPulseYellow 4s ease-in-out infinite' :
                    'glowPulseGreen 4s ease-in-out infinite',
         zIndex: 1
       },
@@ -174,7 +237,7 @@ const KpiMetaCard = ({
       </div>
       
       <div style={{ position: 'relative', zIndex: 2 }}>
-        <CircularProgressBar value={value} color={progressColor} theme={theme} />
+        <CircularProgressBar value={metaData.porcentajeCumplimiento} color={progressColor} theme={theme} />
       </div>
       
       <Typography 
@@ -182,7 +245,7 @@ const KpiMetaCard = ({
         sx={{ 
           color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.8)' : theme.palette.text.secondary,
           fontWeight: 500,
-          fontSize: '0.95rem', // Aumentado de 0.875rem
+          fontSize: '0.95rem',
           mb: 1,
           position: 'relative',
           zIndex: 2
@@ -202,7 +265,7 @@ const KpiMetaCard = ({
           overflow: 'hidden',
         }}>
           <div style={{
-            width: `${Math.min(value, 200)}%`,
+            width: `${Math.min(metaData.porcentajeCumplimiento, 200)}%`,
             height: '100%',
             background: progressColor,
             borderRadius: 4,
@@ -215,15 +278,47 @@ const KpiMetaCard = ({
         variant="body2" 
         sx={{ 
           color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : theme.palette.text.secondary,
-          fontSize: '0.85rem', // Aumentado de 0.75rem
+          fontSize: '0.85rem',
           textAlign: 'center',
           lineHeight: 1.4,
           position: 'relative',
-          zIndex: 2
+          zIndex: 2,
+          mb: 1
         }}
       >
         {description}
       </Typography>
+
+      {/* Información adicional de ventas actuales y faltante */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        width: '100%', 
+        mt: 1,
+        position: 'relative',
+        zIndex: 2
+      }}>
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            fontSize: '0.75rem',
+            color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+            fontWeight: 500
+          }}
+        >
+          Actual: {formatValue(metaData.ventasActuales)}
+        </Typography>
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            fontSize: '0.75rem',
+            color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+            fontWeight: 500
+          }}
+        >
+          Meta: {formatValue(metaData.meta)}
+        </Typography>
+      </Box>
     </Box>
   );
 };

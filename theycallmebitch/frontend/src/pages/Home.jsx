@@ -115,24 +115,29 @@ export default function Home() {
 
   const fetchData = async () => {
     try {
+      console.log('🔄 Iniciando fetchData en Home...');
       setLoading(true);
       setError(null);
 
       // Obtener datos de KPIs
+      console.log('📊 Obteniendo KPIs...');
       const kpisData = await getKpis();
-      console.log('KPIs obtenidos:', kpisData);
+      console.log('✅ KPIs obtenidos:', kpisData);
 
       // Obtener pedidos para cálculos adicionales
+      console.log('📋 Obteniendo pedidos...');
       const pedidosData = await getPedidos();
-      console.log('Pedidos obtenidos:', pedidosData);
+      console.log('✅ Pedidos obtenidos:', pedidosData.length, 'registros');
 
       // Obtener ventas históricas para el gráfico
+      console.log('📈 Obteniendo ventas históricas...');
       const ventasHistoricas = await getVentasHistoricas();
-      console.log('Ventas históricas obtenidas:', ventasHistoricas);
+      console.log('✅ Ventas históricas obtenidas:', ventasHistoricas.length, 'registros');
 
       // Obtener ventas totales históricas
+      console.log('💰 Obteniendo ventas totales históricas...');
       const ventasTotalesHistoricas = await getVentasTotalesHistoricas();
-      console.log('Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
+      console.log('✅ Ventas totales históricas obtenidas:', ventasTotalesHistoricas);
 
       // CALCULAR VENTAS DE HOY - VERSIÓN SIMPLIFICADA
       const fechaActual = new Date();
@@ -204,6 +209,7 @@ export default function Home() {
       console.log('Es positivo:', (kpisData.total_pedidos_mes || 0) >= pedidosMesPasadoProyectado);
       console.log('=== FIN DEBUG PEDIDOS ===');
 
+      console.log('🔄 Actualizando estado con datos procesados...');
       // Actualizar estado con datos reales
       setData({
         ventas: kpisData.ventas_mes || 0,
@@ -251,12 +257,14 @@ export default function Home() {
       console.log('Porcentaje de cambio calculado:', calcularPorcentajeCambio(data.costos, costosMesPasado));
       console.log('Es positivo:', data.costos <= costosMesPasado);
       console.log('=== FIN DEBUG COSTOS ===');
+      console.log('✅ fetchData completado exitosamente');
 
     } catch (err) {
-      console.error('Error obteniendo datos:', err);
+      console.error('❌ Error obteniendo datos:', err);
       setError('Error al cargar los datos del dashboard');
     } finally {
       setLoading(false);
+      console.log('🏁 fetchData finalizado');
     }
   };
 
@@ -268,27 +276,41 @@ export default function Home() {
   };
 
   useEffect(() => {
+    console.log('🚀 useEffect ejecutándose en Home...');
     fetchData();
     
-    // Actualización automática cada 10 minutos
+    // Actualización automática cada 1 minuto (para pruebas)
     const interval = setInterval(() => {
-      console.log('Actualización automática de datos...');
+      console.log('⏰ Actualización automática de datos...');
       fetchData();
-    }, 10 * 60 * 1000); // 10 minutos
+    }, 1 * 60 * 1000); // 1 minuto (cambiado de 10 minutos para pruebas)
 
     // Escuchar evento de actualización global
     const handleGlobalRefresh = () => {
-      console.log('Actualización global detectada en Home...');
+      console.log('🌍 Actualización global detectada en Home...');
       fetchData();
     };
 
     window.addEventListener('globalRefresh', handleGlobalRefresh);
 
     return () => {
+      console.log('🧹 Limpiando useEffect en Home...');
       clearInterval(interval);
       window.removeEventListener('globalRefresh', handleGlobalRefresh);
     };
   }, []);
+
+  // Monitorear cambios en el estado
+  useEffect(() => {
+    console.log('📊 Estado actualizado en Home:', {
+      ventas: data.ventas,
+      pedidos: data.pedidos,
+      clientes: data.clientes,
+      ventasMensuales: data.ventasMensuales,
+      ventasSemanales: data.ventasSemanales,
+      ventasDiarias: data.ventasDiarias
+    });
+  }, [data]);
 
 
 
@@ -617,7 +639,9 @@ export default function Home() {
             }}
           >
             <KpiMetaCard 
-              value={data.meta}
+              currentValue={data.ventasMensuales}
+              targetValue={calcularMeta(data.ventasMesPasado)}
+              percentage={data.meta}
               title="Meta de Ventas"
               subtitle="Objetivo Mensual"
               description="Progreso respecto a la meta establecida para este mes."
