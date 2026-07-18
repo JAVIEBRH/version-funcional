@@ -66,3 +66,17 @@ def test_predecir_proximos_dias_con_poco_historial_devuelve_vacio():
     pedidos = _pedidos_sinteticos(dias=5)
     predicciones = dfs.predecir_proximos_dias(pedidos, dias=7)
     assert predicciones == []
+
+
+def test_validar_precision_devuelve_mape_razonable():
+    pedidos = _pedidos_sinteticos(dias=90)
+    resultado = dfs.validar_precision(pedidos, dias_test=20)
+    assert resultado['dias_evaluados'] > 0
+    assert resultado['mape_pct'] is not None
+    assert resultado['mape_pct'] >= 0
+
+
+def test_validar_precision_con_poco_historial_devuelve_none():
+    pedidos = _pedidos_sinteticos(dias=20)
+    resultado = dfs.validar_precision(pedidos, dias_test=30)
+    assert resultado == {'mape_pct': None, 'dias_evaluados': 0}

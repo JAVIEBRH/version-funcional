@@ -146,3 +146,41 @@ def predecir_proximos_dias(pedidos: List[Dict], dias: int = 7, temperaturas_futu
         ], ignore_index=True)
 
     return resultado
+
+
+MIN_DIAS_VALIDACION = 45
+
+
+def validar_precision(pedidos: List[Dict], dias_test: int = 30) -> Dict:
+    """Walk-forward validation: para cada uno de los últimos `dias_test`
+    días, entrena un modelo P50 solo con datos anteriores a ese día y
+    predice ese día puntual, comparando contra lo que realmente pasó.
+    Devuelve el error porcentual promedio real (MAPE), no inventado."""
+    serie = construir_serie_diaria(pedidos)
+    if len(serie) < MIN_DIAS_VALIDACION:
+        return {'mape_pct': None, 'dias_evaluados': 0}
+
+    errores = []
+    inicio_test = max(MIN_DIAS_ENTRENAMIENTO, len(serie) - dias_test)
+
+    for i in range(inicio_test, len(serie)):
+        entrenamiento = serie.iloc[:i]
+        if len(entrenamiento) < MIN_DIAS_ENTRENAMIENTO:
+            continue
+
+        real = serie['pedidos'].iloc[i]
+        features_train = agregar_features(entrenamiento)
+        modelo = _entrenar_modelo_cuantil(features_train[FEATURES], features_train['pedidos'], 0.5)
+
+        fila_objetivo = pd.concat([entrenamiento, serie.iloc[[i]]], ignore_index=True)
+        features_pred = agregar_features(fila_objetivo).iloc[[-1]]
+        prediccion = max(0.0, float(modelo.predict(features_pred[FEATURES])[0]))
+
+        base = max(real, 1)  # evita división por cero en días con 0 pedidos reales
+        errores.append(abs(prediccion - real) / base)
+
+    if not errores:
+        return {'mape_pct': None, 'dias_evaluados': 0}
+
+    mape = round(float(np.mean(errores)) * 100, 1)
+    return {'mape_pct': mape, 'dias_evaluados': len(errores)}
