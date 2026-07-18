@@ -18,7 +18,6 @@ import {
   TableRow,
   Paper,
   Button,
-  Menu,
   MenuItem,
   FormControl,
   InputLabel,
@@ -38,8 +37,7 @@ import {
   Search as SearchIcon, 
   FilterList as FilterListIcon, 
   Add, 
-  MoreVert as MoreVertIcon, 
-  LocationOn as LocationOnIcon, 
+  LocationOn as LocationOnIcon,
   Phone as PhoneIcon, 
   Email as EmailIcon, 
   Warning, 
@@ -105,7 +103,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [filterTipo, setFilterTipo] = useState('Todos');
-  const [anchorEl, setAnchorEl] = useState(null);
   const [showRiesgoTable, setShowRiesgoTable] = useState(false);
   const [showVipTable, setShowVipTable] = useState(false);
   
@@ -126,172 +123,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
   // Estados para notificaciones
   const [notificationsAnchorEl, setNotificationsAnchorEl] = useState(null);
 
-  // Función unificada para calcular estado activo/inactivo
-  const calcularEstadoCliente = (fechaUltimo) => {
-    if (!fechaUltimo || fechaUltimo.trim() === '') return 'Inactivo';
-    
-    // Normalizar fecha: acepta DD-MM-YYYY o YYYY-MM-DD
-    const fecha = parseFecha(fechaUltimo);
-    if (!fecha) {
-      console.warn('Fecha inválida para cálculo de estado:', fechaUltimo);
-      return 'Inactivo';
-    }
-    
-    // Verificar que la fecha no sea futura (más de 1 día en el futuro)
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0); // Normalizar hora para comparación
-    const fechaNormalizada = new Date(fecha);
-    fechaNormalizada.setHours(0, 0, 0, 0);
-    
-    const diffMs = hoy - fechaNormalizada;
-    const diffDias = diffMs / (1000 * 60 * 60 * 24);
-    
-    // Si la fecha es futura o muy antigua (más de 10 años), considerar inactivo
-    if (diffDias < -1 || diffDias > 3650) {
-      console.warn('Fecha fuera de rango razonable:', fechaUltimo, 'diferencia en días:', diffDias);
-      return 'Inactivo';
-    }
-    
-    return diffDias <= 75 ? 'Activo' : 'Inactivo';
-  };
-
-  // Función para generar datos de clientes en riesgo (recibe datos como parámetros)
-  const generarClientesEnRiesgoData = (clientesData, pedidosData) => {
-    if (!clientesData || clientesData.length === 0 || !pedidosData || pedidosData.length === 0) {
-      return [];
-    }
-
-    const hoy = new Date();
-    
-    // Calcular estado para cada cliente
-    const clientesConEstadoTemp = clientesData.map(cliente => ({
-      ...cliente,
-      estado: calcularEstadoCliente(cliente.ultimo_pedido)
-    }));
-    
-    // Obtener clientes que están en riesgo (60-75 días sin comprar)
-    const clientesEnRiesgoReales = clientesConEstadoTemp.filter(c => {
-      const fechaUltimo = parseFecha(c.ultimo_pedido || '');
-      if (!fechaUltimo) return false;
-      const diff = (hoy - fechaUltimo) / (1000 * 60 * 60 * 24);
-      return diff > 60 && diff <= 75;
-    });
-
-    // Calcular ticket promedio para cada cliente
-    const clientesConTicketPromedio = clientesEnRiesgoReales.map(cliente => {
-      // Buscar todos los pedidos de este cliente (por dirección y email)
-      const pedidosCliente = pedidosData.filter(p => {
-        const emailPedido = (p.usuario || '').trim().toLowerCase();
-        const emailCliente = (cliente.email || '').trim().toLowerCase();
-        const matchEmail = emailCliente && emailPedido && emailCliente === emailPedido;
-        
-        const dirPedido = (p.dire || p.direccion || '').trim().toLowerCase();
-        const dirCliente = (cliente.direccion || '').trim().toLowerCase();
-        const matchDireccion = dirCliente && dirPedido && dirCliente === dirPedido && dirPedido !== '';
-        
-        return matchEmail || matchDireccion;
-      });
-
-      // Calcular ticket promedio
-      const totalComprado = pedidosCliente.reduce((sum, p) => sum + Number(p.precio || 0), 0);
-      const ticketPromedio = pedidosCliente.length > 0 ? totalComprado / pedidosCliente.length : 0;
-
-      // Calcular días sin comprar
-      const fechaUltimo = parseFecha(cliente.ultimo_pedido || '');
-      const diasSinComprar = fechaUltimo ? Math.floor((hoy - fechaUltimo) / (1000 * 60 * 60 * 24)) : 0;
-
-      // Formatear fecha de última compra
-      const ultimaCompra = fechaUltimo ? 
-        fechaUltimo.toLocaleDateString('es-ES', { 
-          day: '2-digit', 
-          month: '2-digit', 
-          year: 'numeric' 
-        }).replace(/\//g, '-') : '';
-
-      return {
-        id: cliente.id || Math.random().toString(36).substr(2, 9),
-        nombre: cliente.nombre || cliente.direccion || 'Cliente',
-        direccion: cliente.direccion || 'Sin dirección',
-        email: cliente.email || '',
-        ultimaCompra: ultimaCompra,
-        ticketPromedio: Math.round(ticketPromedio),
-        diasSinComprar: diasSinComprar,
-        estado: diasSinComprar > 65 ? 'critico' : 'moderado'
-      };
-    });
-
-    // Ordenar por días sin comprar (descendente) y mostrar todos
-    return clientesConTicketPromedio
-      .sort((a, b) => b.diasSinComprar - a.diasSinComprar);
-  };
-
-  // Función para generar datos de clientes VIP (recibe datos como parámetros)
-  const generarClientesVipData = (clientesVIPyFrecuenciaData, pedidosData) => {
-    if (!clientesVIPyFrecuenciaData || clientesVIPyFrecuenciaData.length === 0 || !pedidosData || pedidosData.length === 0) {
-      return [];
-    }
-
-    const hoy = new Date();
-    
-    // Obtener clientes VIP (los que están tanto en VIP como en Frecuencia)
-    const clientesVipReales = clientesVIPyFrecuenciaData.map(cliente => {
-      // Buscar todos los pedidos de este cliente (por dirección y email)
-      const pedidosCliente = pedidosData.filter(p => {
-        const emailPedido = (p.usuario || '').trim().toLowerCase();
-        const emailCliente = (cliente.email || '').trim().toLowerCase();
-        const matchEmail = emailCliente && emailPedido && emailCliente === emailPedido;
-        
-        const dirPedido = (p.dire || p.direccion || '').trim().toLowerCase();
-        const dirCliente = (cliente.direccion || '').trim().toLowerCase();
-        const matchDireccion = dirCliente && dirPedido && dirCliente === dirPedido && dirPedido !== '';
-        
-        return matchEmail || matchDireccion;
-      });
-
-      // Calcular ticket promedio
-      const totalComprado = pedidosCliente.reduce((sum, p) => sum + Number(p.precio || 0), 0);
-      const ticketPromedio = pedidosCliente.length > 0 ? totalComprado / pedidosCliente.length : 0;
-
-      // Calcular días desde última compra
-      const fechaUltimo = parseFecha(cliente.ultimo_pedido || '');
-      const diasDesdeUltimaCompra = fechaUltimo ? Math.floor((hoy - fechaUltimo) / (1000 * 60 * 60 * 24)) : 0;
-
-      // Formatear fecha de última compra
-      const ultimaCompra = fechaUltimo ? 
-        fechaUltimo.toLocaleDateString('es-ES', { 
-          day: '2-digit', 
-          month: '2-digit', 
-          year: 'numeric' 
-        }).replace(/\//g, '-') : '';
-
-      // Determinar estado basado en días desde última compra
-      const estado = diasDesdeUltimaCompra <= 75 ? 'activo' : 'inactivo';
-
-      return {
-        id: cliente.id || Math.random().toString(36).substr(2, 9),
-        nombre: cliente.nombre || cliente.direccion || 'Cliente',
-        direccion: cliente.direccion || 'Sin dirección',
-        email: cliente.email || '',
-        totalComprado: Math.round(totalComprado),
-        pedidos: cliente.pedidos || pedidosCliente.length,
-        ticketPromedio: Math.round(ticketPromedio),
-        ultimaCompra: ultimaCompra,
-        estado: estado
-      };
-    });
-
-    // Ordenar por total comprado (descendente) y mostrar todos
-    return clientesVipReales
-      .sort((a, b) => b.totalComprado - a.totalComprado);
-  };
-
-  // Calcular clientes con estado (usar useMemo para evitar recálculos innecesarios)
-  const clientesConEstado = React.useMemo(() => {
-    return clientes.map(cliente => {
-      const estado = calcularEstadoCliente(cliente.ultimo_pedido);
-      return { ...cliente, estado };
-    });
-  }, [clientes]);
+  // El estado (Activo/En Riesgo/Inactivo) ya viene resuelto por el backend
+  // (customer_risk_service, cadencia personal) — no se recalcula en el cliente.
+  const clientesConEstado = clientes;
 
   const clientesActivos = React.useMemo(() => 
     clientesConEstado.filter(c => c.estado === 'Activo'), 
@@ -335,15 +169,14 @@ export default function Clientes({ refreshTrigger = 0 }) {
   useEffect(() => { setPagina(1); }, [searchTerm, filterEstado, filterTipo]);
 
   // Función para cargar datos
-    const cargarDatos = async () => {
-      try {
+  const cargarDatos = async () => {
+    try {
       setLoading(true);
       const [clientesDataRaw, pedidosDataRaw] = await Promise.all([
-          getClientes(),
-          getPedidos()
-        ]);
+        getClientes(),
+        getPedidos()
+      ]);
 
-      // Adaptar pedidos primero para poder calcular estadísticas
       const pedidosData = pedidosDataRaw.map((p, idx) => ({
         id: idx + 1,
         usuario: p.usuario || '',
@@ -352,216 +185,45 @@ export default function Clientes({ refreshTrigger = 0 }) {
         fecha: p.fecha || '',
         status: p.status || '',
         dire: p.dire || p.direccion || '',
-        ordenpedido: p.ordenpedido || '', // Cantidad de bidones por pedido
+        ordenpedido: p.ordenpedido || '',
       }));
 
-      // Adaptar clientes y calcular pedidos/total desde pedidosData
-      const clientesData = clientesDataRaw.map((c, idx) => {
-        // El backend devuelve: nombre, correo, dire (no usuario)
-        // Los pedidos tienen: usuario (email), dire
-        // Buscar todos los pedidos de este cliente (por email/correo o dirección)
-        const emailCliente = (c.correo || c.usuario || '').trim().toLowerCase();
-        const dirCliente = (c.dire || c.direccion || '').trim().toLowerCase();
-        
-        const pedidosCliente = pedidosData.filter(p => {
-          // Comparar usuario (email) del pedido con correo del cliente
-          const emailPedido = (p.usuario || '').trim().toLowerCase();
-          const matchEmail = emailCliente && emailPedido && emailCliente === emailPedido;
-          
-          // Comparar dirección del pedido con dirección del cliente
-          const dirPedido = (p.dire || p.direccion || '').trim().toLowerCase();
-          const matchDireccion = dirCliente && dirPedido && dirCliente === dirPedido && dirPedido !== '';
-          
-          return matchEmail || matchDireccion;
-        });
+      // El backend ya agrega por cliente, calcula estado (cadencia personal,
+      // igual que el Predictor) y tipo (segmento RFM) — no se recalcula nada acá.
+      const clientesData = clientesDataRaw.map((c, idx) => ({
+        id: idx + 1,
+        nombre: c.direccion && c.direccion.trim() !== '' ? c.direccion.trim() : (c.usuario || `Cliente ${idx + 1}`),
+        email: c.usuario || '',
+        telefono: c.telefono || '',
+        direccion: c.direccion || '',
+        estado: c.estado === 'activo' ? 'Activo' : (c.estado === 'en_riesgo' ? 'En Riesgo' : 'Inactivo'),
+        tipo: c.tipo || 'Regular',
+        pedidos: c.pedidos || 0,
+        total_comprado: c.total_comprado || 0,
+        ultimo_pedido: c.ultimo_pedido || '',
+        primera_compra: c.primera_compra || '',
+        dias_atraso: c.dias_atraso || 0,
+        cadencia_personal_dias: c.cadencia_personal_dias,
+      }));
 
-        // Calcular total de pedidos y monto total
-        const totalPedidos = pedidosCliente.length;
-        const totalComprado = pedidosCliente.reduce((sum, p) => sum + (p.precio || 0), 0);
+      setClientes(clientesData);
+      setPedidos(pedidosData);
+      calcularListas(clientesData, pedidosData);
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+      setError(`Error al cargar datos: ${error.message || 'Error desconocido'}`);
+      setClientes([]);
+      setPedidos([]);
+      setClientesVIP([]);
+      setClientesFrecuencia([]);
+      setClientesEnRiesgoData([]);
+      setClientesVipData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // Encontrar fecha del último pedido
-        const fechasPedidos = pedidosCliente
-          .map(p => parseFecha(p.fecha))
-          .filter(f => f !== null)
-          .sort((a, b) => b - a);
-        const ultimaFechaPedido = fechasPedidos.length > 0 ? fechasPedidos[0] : parseFecha(c.fecha);
 
-        // Obtener dirección del cliente (prioridad: 1. Dirección del cliente, 2. Pedidos por email, 3. Pedidos asociados)
-        let direccionCliente = (c.dire || c.direccion || '').trim();
-        
-        // PRIORIDAD 1: Si no tiene dirección propia, buscar en TODOS los pedidos que coincidan con el email (más confiable)
-        if (!direccionCliente && emailCliente) {
-          const pedidosPorEmail = pedidosData.filter(p => {
-            const emailPedido = (p.usuario || '').trim().toLowerCase();
-            return emailPedido && emailPedido === emailCliente;
-          });
-          if (pedidosPorEmail.length > 0) {
-            const direccionesEmail = pedidosPorEmail
-              .map(p => (p.dire || p.direccion || '').trim())
-              .filter(d => d !== '');
-            if (direccionesEmail.length > 0) {
-              // Usar la dirección más frecuente (o la primera si todas son iguales)
-              direccionCliente = direccionesEmail[0];
-            }
-          }
-        }
-        
-        // PRIORIDAD 2: Si aún no tiene dirección, buscar en los pedidos asociados por dirección
-        if (!direccionCliente && pedidosCliente.length > 0) {
-          const direccionesPedidos = pedidosCliente
-            .map(p => (p.dire || p.direccion || '').trim())
-            .filter(d => d !== '');
-          if (direccionesPedidos.length > 0) {
-            direccionCliente = direccionesPedidos[0];
-          }
-        }
-
-        // Determinar nombre a mostrar (evitar "Cliente X" si hay nombre real)
-        const nombreMostrar = c.nombre && c.nombre.trim() !== '' && !c.nombre.includes('Cliente') 
-          ? c.nombre.trim() 
-          : (c.correo || c.usuario || `Cliente ${idx + 1}`);
-
-        return {
-          id: idx + 1,
-          nombre: nombreMostrar,
-          email: c.correo || '', // El backend devuelve 'correo'
-          telefono: c.telefonou || c.telefono || '',
-          direccion: direccionCliente, // Usar dirección del cliente o de sus pedidos
-          estado: calcularEstadoCliente(ultimaFechaPedido ? ultimaFechaPedido.toISOString().split('T')[0] : c.fecha),
-          tipo: 'Regular', // Puedes mejorar esto si tienes lógica para VIP
-          pedidos: totalPedidos,
-          total_comprado: totalComprado || c.monto_ultimo_pedido || 0,
-          ultimo_pedido: ultimaFechaPedido ? ultimaFechaPedido.toISOString().split('T')[0] : (c.fecha || ''),
-          // Guardar campos originales para debugging
-          correo_original: c.correo,
-          dire_original: c.dire
-        };
-      });
-        
-        setClientes(clientesData);
-        setPedidos(pedidosData);
-        calcularListas(clientesData, pedidosData);
-        
-      // Log para verificar estados y fechas problemáticas
-      const activos = clientesData.filter(c => c.estado === 'Activo').length;
-      const inactivos = clientesData.filter(c => c.estado === 'Inactivo').length;
-      
-      // Verificar fechas problemáticas
-      const fechasInvalidas = clientesData.filter(c => {
-        const fecha = parseFecha(c.ultimo_pedido);
-        return !fecha && c.ultimo_pedido && c.ultimo_pedido.trim() !== '';
-      });
-      
-      console.log('Datos actualizados:', new Date().toLocaleTimeString());
-      console.log(`Total clientes cargados: ${clientesData.length}`);
-      console.log(`Total pedidos cargados: ${pedidosData.length}`);
-      console.log(`Estados calculados: ${activos} activos, ${inactivos} inactivos`);
-      console.log('Ejemplo de cliente procesado:', clientesData[0]);
-      console.log('Ejemplo de cliente RAW del backend:', clientesDataRaw[0]);
-      console.log('Ejemplo de pedido:', pedidosData[0]);
-      console.log('Ejemplo de pedido RAW del backend:', pedidosDataRaw[0]);
-      // Verificar si ordenpedido está presente
-      const pedidosConOrdenPedido = pedidosData.filter(p => p.ordenpedido && p.ordenpedido.trim() !== '');
-      console.log(`Pedidos con ordenpedido: ${pedidosConOrdenPedido.length} de ${pedidosData.length}`);
-      if (pedidosConOrdenPedido.length > 0) {
-        console.log('Ejemplo de pedido CON ordenpedido:', pedidosConOrdenPedido[0]);
-      } else {
-        console.warn('⚠️ NINGÚN PEDIDO TIENE ordenpedido - Todos los pedidos tienen ordenpedido vacío');
-      }
-      
-      // Verificar direcciones en pedidos
-      const pedidosConDireccion = pedidosData.filter(p => p.dire && p.dire.trim() !== '');
-      console.log(`Pedidos con dirección: ${pedidosConDireccion.length} de ${pedidosData.length}`);
-      if (pedidosConDireccion.length > 0) {
-        console.log('Ejemplo de pedido CON dirección:', pedidosConDireccion[0]);
-      } else {
-        console.warn('⚠️ NINGÚN PEDIDO TIENE DIRECCIÓN - Todos los pedidos tienen dire vacío');
-      }
-      // Verificar coincidencias y direcciones
-      const clienteConPedidos = clientesData.find(c => c.pedidos > 0);
-      const clienteConDireccion = clientesData.find(c => c.direccion && c.direccion.trim() !== '');
-      const clientesSinDireccion = clientesData.filter(c => !c.direccion || c.direccion.trim() === '');
-      
-      if (clienteConPedidos) {
-        console.log('Cliente con pedidos encontrado:', clienteConPedidos);
-      } else {
-        console.warn('⚠️ NINGÚN CLIENTE TIENE PEDIDOS ASOCIADOS - Revisar lógica de mapeo');
-      }
-      
-      if (clienteConDireccion) {
-        console.log('✅ Cliente con dirección encontrado:', clienteConDireccion);
-      } else {
-        console.warn(`⚠️ NINGÚN CLIENTE TIENE DIRECCIÓN - ${clientesSinDireccion.length} clientes sin dirección`);
-        if (clientesSinDireccion.length > 0) {
-          const ejemploSinDireccion = clientesSinDireccion[0];
-          console.log('Ejemplo de cliente sin dirección:', ejemploSinDireccion);
-          // Buscar pedidos de este cliente específico para debugging
-          const pedidosEjemplo = pedidosData.filter(p => {
-            const emailEjemplo = (ejemploSinDireccion.email || '').trim().toLowerCase();
-            const emailPedido = (p.usuario || '').trim().toLowerCase();
-            return emailEjemplo && emailPedido && emailEjemplo === emailPedido;
-          });
-          console.log(`Pedidos encontrados para "${ejemploSinDireccion.nombre}" (${ejemploSinDireccion.email}):`, pedidosEjemplo.length);
-          if (pedidosEjemplo.length > 0) {
-            console.log('Primer pedido del cliente sin dirección:', pedidosEjemplo[0]);
-          } else {
-            console.warn(`⚠️ "${ejemploSinDireccion.nombre}" NO tiene pedidos con email "${ejemploSinDireccion.email}"`);
-          }
-        }
-      }
-      
-      // Contar clientes con y sin dirección
-      const clientesConDireccionTotal = clientesData.filter(c => c.direccion && c.direccion.trim() !== '').length;
-      console.log(`📊 Resumen: ${clientesConDireccionTotal} de ${clientesData.length} clientes tienen dirección (${Math.round(clientesConDireccionTotal/clientesData.length*100)}%)`);
-      
-      // Log de KPIs calculados
-      const totalActivos = clientesData.filter(c => c.estado === 'Activo').length;
-      const totalInactivos = clientesData.filter(c => c.estado === 'Inactivo').length;
-      console.log('📈 KPIs calculados:', {
-        totalClientes: clientesData.length,
-        totalClientesActivos: totalActivos,
-        totalClientesInactivos: totalInactivos,
-        totalPedidos: pedidosData.length
-      });
-      
-      // Verificar algunos ejemplos de estados
-      const ejemplosActivos = clientesData.filter(c => c.estado === 'Activo').slice(0, 2);
-      const ejemplosInactivos = clientesData.filter(c => c.estado === 'Inactivo').slice(0, 2);
-      if (ejemplosActivos.length > 0) {
-        console.log('📊 Ejemplos de clientes ACTIVOS:', ejemplosActivos.map(c => ({
-          nombre: c.nombre,
-          ultimo_pedido: c.ultimo_pedido,
-          estado: c.estado
-        })));
-      }
-      if (ejemplosInactivos.length > 0) {
-        console.log('📊 Ejemplos de clientes INACTIVOS:', ejemplosInactivos.map(c => ({
-          nombre: c.nombre,
-          ultimo_pedido: c.ultimo_pedido,
-          estado: c.estado
-        })));
-      }
-      
-      if (fechasInvalidas.length > 0) {
-        console.warn('Fechas inválidas encontradas:', fechasInvalidas.map(c => ({
-          cliente: c.nombre,
-          fecha: c.ultimo_pedido
-        })));
-      }
-      } catch (error) {
-        console.error('Error cargando datos:', error);
-        setError(`Error al cargar datos: ${error.message || 'Error desconocido'}`);
-        setClientes([]);
-        setPedidos([]);
-        setClientesVIP([]);
-        setClientesFrecuencia([]);
-        setClientesEnRiesgoData([]);
-        setClientesVipData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
   // Cargar datos iniciales y cuando se solicita actualización manual
   useEffect(() => {
     cargarDatos();
@@ -577,11 +239,9 @@ export default function Clientes({ refreshTrigger = 0 }) {
     const debouncedCargarDatos = () => {
       const now = Date.now();
       if (now - lastRefresh < DEBOUNCE_DELAY) {
-        console.log('Actualización debounceada (muy reciente)');
         return;
       }
       lastRefresh = now;
-      console.log('Actualización automática (Clientes):', new Date().toLocaleTimeString());
       cargarDatos();
     };
 
@@ -589,21 +249,18 @@ export default function Clientes({ refreshTrigger = 0 }) {
 
     // Escuchar evento de actualización global (con debounce)
     const handleGlobalRefresh = () => {
-      console.log('Actualización global detectada en Clientes...');
       if (timeoutId) clearTimeout(timeoutId);
       timeoutId = setTimeout(debouncedCargarDatos, 1000);
     };
 
     // Refrescar al volver el foco a la pestaña (con debounce)
     const handleFocus = () => {
-      console.log('Foco en ventana: refrescando Clientes');
       if (timeoutId) clearTimeout(timeoutId);
       timeoutId = setTimeout(debouncedCargarDatos, 1000);
     };
-    
+
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Pestaña visible: refrescando Clientes');
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(debouncedCargarDatos, 1000);
       }
@@ -703,27 +360,13 @@ export default function Clientes({ refreshTrigger = 0 }) {
         (new Date(fechaCompras) > new Date(fechaCliente) ? fechaCompras : fechaCliente) :
         (fechaCompras || fechaCliente);
       
-      // Calcular estado funcional usando función unificada
-      const estado = calcularEstadoCliente(fechaFinal);
-      
-      // Debug para Walker Martinez
-      if (cliente.nombre && cliente.nombre.toLowerCase().includes('walker')) {
-        console.log('Walker en lista VIP:', {
-          nombre: cliente.nombre,
-          fechaCompras: fechaCompras,
-          fechaCliente: fechaCliente,
-          fechaFinal: fechaFinal,
-          estado: estado
-        });
-      }
-      
       return {
         ...cliente,
         total_comprado: compras.total,
         pedidos: compras.frecuencia,
         ultimo_pedido: fechaFinal,
         bidonesPorPedido: bidonesPorPedido,
-        estado: estado
+        estado: cliente.estado
       };
     });
 
@@ -737,20 +380,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
       .sort((a, b) => b.pedidos - a.pedidos)
       .slice(0, 15);
 
-    // Log para verificar cálculo de bidones
-    console.log('📦 Cálculo de bidones por pedido:');
-    if (topVIP.length > 0) {
-      console.log('Ejemplo de cliente VIP con bidones:', {
-        direccion: topVIP[0].direccion,
-        pedidos: topVIP[0].pedidos,
-        bidonesPorPedido: topVIP[0].bidonesPorPedido,
-        total_comprado: topVIP[0].total_comprado
-      });
-    }
-    // Verificar si hay clientes con bidones > 0
-    const clientesConBidones = topVIP.filter(c => c.bidonesPorPedido && c.bidonesPorPedido > 0);
-    console.log(`Clientes VIP con bidones > 0: ${clientesConBidones.length} de ${topVIP.length}`);
-
     setClientesVIP(topVIP);
     setClientesFrecuencia(topFrecuencia);
     
@@ -758,21 +387,12 @@ export default function Clientes({ refreshTrigger = 0 }) {
     const direccionesVIPTemp = new Set(topVIP.map(c => (c.direccion || '').toLowerCase()));
     const direccionesFrecuenciaTemp = new Set(topFrecuencia.map(c => (c.direccion || '').toLowerCase()));
     const clientesVIPyFrecuenciaTemp = topVIP.filter(c => direccionesFrecuenciaTemp.has((c.direccion || '').toLowerCase()));
-    
-    // Generar datos de clientes en riesgo y VIP después de calcular las listas
-    const riesgoData = generarClientesEnRiesgoData(clientesData, pedidosData);
-    const vipData = generarClientesVipData(clientesVIPyFrecuenciaTemp, pedidosData);
-    
+
+    const riesgoData = clientesData.filter(c => c.estado === 'En Riesgo');
+    const vipData = clientesVIPyFrecuenciaTemp;
+
     setClientesEnRiesgoData(riesgoData);
     setClientesVipData(vipData);
-  };
-
-  const handleMenuClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
   };
 
   // Filtros de estado para listas VIP y Frecuencia
@@ -792,29 +412,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
        (cliente.direccion || '').toLowerCase().includes(searchLower))
     );
   }, [clientesVIP, filtroEstadoVIP, searchTermVIP]);
-  
-  // Log para verificar datos de la tabla VIP
-  if (filteredVIP.length > 0) {
-    console.log('🔍 Datos de filteredVIP para tabla:', {
-      total: filteredVIP.length,
-      primerCliente: {
-        direccion: filteredVIP[0].direccion,
-        pedidos: filteredVIP[0].pedidos,
-        bidonesPorPedido: filteredVIP[0].bidonesPorPedido,
-        total_comprado: filteredVIP[0].total_comprado,
-        tieneBidones: !!filteredVIP[0].bidonesPorPedido,
-        valorBidones: filteredVIP[0].bidonesPorPedido
-      },
-      todosLosCampos: Object.keys(filteredVIP[0])
-    });
-    
-    // Verificar todos los clientes VIP
-    const clientesSinBidones = filteredVIP.filter(c => !c.bidonesPorPedido || c.bidonesPorPedido === 0);
-    if (clientesSinBidones.length > 0) {
-      console.warn(`⚠️ ${clientesSinBidones.length} clientes VIP NO tienen bidonesPorPedido`);
-      console.log('Ejemplo de cliente sin bidones:', clientesSinBidones[0]);
-    }
-  }
 
   const filteredFrecuencia = React.useMemo(() => {
     const searchLower = searchTermFrecuencia.toLowerCase();
@@ -936,7 +533,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Pedidos</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Total Comprado</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Último Pedido</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1023,16 +619,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                         {(() => {
                           const valor = cliente.bidonesPorPedido;
-                          // Log solo para el primer cliente para debugging
-                          if (idx === 0) {
-                            console.log('🔬 Renderizando bidonesPorPedido:', {
-                              valor: valor,
-                              tipo: typeof valor,
-                              esNumero: typeof valor === 'number',
-                              mayorACero: valor > 0,
-                              cliente: cliente.direccion
-                            });
-                          }
                           if (valor && valor > 0) {
                             return valor % 1 === 0 
                               ? Math.round(valor) 
@@ -1083,11 +669,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         return fecha && !isNaN(fecha) ? fecha.toLocaleDateString('es-ES') : 'N/A';
                       })()}
                     </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <IconButton onClick={handleMenuClick}>
-                      <MoreVertIcon sx={{ color: 'text.primary' }} />
-                    </IconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1385,7 +966,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
       });
     }
 
-    // Clientes nuevos (últimos 30 días)
+    // Clientes nuevos (últimos 75 días)
     const clientesNuevos = (() => {
       const hoy = new Date();
       const pedidosPorDireccion = {};
@@ -1402,7 +983,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
         if (!fechas.length) return;
         const fechaPrimera = fechas.reduce((a, b) => a < b ? a : b);
         const diff = (hoy - fechaPrimera) / (1000 * 60 * 60 * 24);
-        if (diff <= 30) count++;
+        if (diff <= 75) count++;
       });
       return count;
     })();
@@ -1412,7 +993,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
         id: 'clientes-nuevos',
         tipo: 'info',
         titulo: 'Clientes Nuevos',
-        mensaje: `${clientesNuevos} nuevos clientes en los últimos 30 días`,
+        mensaje: `${clientesNuevos} nuevos clientes en los últimos 75 días`,
         count: clientesNuevos,
         timestamp: new Date()
       });
@@ -1870,6 +1451,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 >
                   <MenuItem value="Todos">Todos</MenuItem>
                   <MenuItem value="Activo">Activo</MenuItem>
+                  <MenuItem value="En Riesgo">En Riesgo</MenuItem>
                   <MenuItem value="Inactivo">Inactivo</MenuItem>
                 </Select>
               </FormControl>
@@ -2278,52 +1860,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
                     </Box>
                   )}
                   
-                  {notificaciones.length > 0 && (
-                    <>
-                      <Divider sx={{ my: 2, borderColor: theme.palette.divider }} />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Button
-                          variant="text"
-                          size="small"
-                          onClick={() => {
-                            console.log('Marcar todas como leídas');
-                            handleNotificationsClose();
-                          }}
-                          sx={{
-                            color: 'text.secondary',
-                            fontWeight: 500,
-                            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                            '&:hover': {
-                              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
-                            }
-                          }}
-                        >
-                          Marcar todas como leídas
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => {
-                            console.log('Ver todas las notificaciones');
-                            handleNotificationsClose();
-                          }}
-                          sx={{
-                            borderColor: theme.palette.divider,
-                            color: 'text.primary',
-                            fontWeight: 600,
-                            fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                            borderRadius: 2,
-                            '&:hover': {
-                              borderColor: theme.palette.primary.main,
-                              bgcolor: theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.05)'
-                            }
-                          }}
-                        >
-                          Ver todas
-                        </Button>
-                      </Box>
-                    </>
-                  )}
                 </Box>
               </Popover>
             </Box>
@@ -2724,7 +2260,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
                     <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Pedidos</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Total Comprado</TableCell>
                     <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Último Pedido</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'text.primary' }}>Acciones</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2844,11 +2379,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
                             })() : 'N/A'
                           }
                         </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <IconButton onClick={handleMenuClick}>
-                          <MoreVertIcon sx={{ color: 'text.primary' }} />
-                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -3157,24 +2687,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
       </Box>
 
       {/* Sección eliminada - Las alertas ahora están en la campana de notificaciones */}
-
-      {/* Menú de acciones */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-        sx={{
-          '& .MuiPaper-root': {
-            borderRadius: 2,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-          }
-        }}
-      >
-        <MenuItem onClick={handleMenuClose}>Ver Detalles</MenuItem>
-        <MenuItem onClick={handleMenuClose}>Editar Cliente</MenuItem>
-        <MenuItem onClick={handleMenuClose}>Ver Pedidos</MenuItem>
-        <MenuItem onClick={handleMenuClose} sx={{ color: '#dc2626' }}>Eliminar</MenuItem>
-      </Menu>
     </Box>
   );
-} 
+}
