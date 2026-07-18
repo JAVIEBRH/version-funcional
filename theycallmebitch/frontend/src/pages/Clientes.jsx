@@ -59,6 +59,9 @@ import './Clientes.css';
 
   // Función para formatear ticket promedio
   const formatTicketPromedio = (ticket) => {
+    if (ticket === null || ticket === undefined || isNaN(ticket)) {
+      return '$0';
+    }
     if (ticket >= 1000000) {
       return `$${(ticket / 1000000).toFixed(1)}M`;
     } else if (ticket >= 1000) {
@@ -1124,7 +1127,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 </TableHead>
                 <TableBody>
                   {clientesEnRiesgoData
-                    .sort((a, b) => b.diasSinComprar - a.diasSinComprar)
+                    .sort((a, b) => b.dias_atraso - a.dias_atraso)
                     .map((cliente) => (
                     <TableRow key={cliente.id} sx={{ 
                       '&:hover': { 
@@ -1157,28 +1160,28 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={`Última compra: ${cliente.ultimaCompra}`} arrow>
-                          <Typography variant="body2" sx={{ 
-                            color: cliente.diasSinComprar > 65 ? '#ef4444' : '#f59e0b',
+                        <Tooltip title={`Última compra: ${cliente.ultimo_pedido}`} arrow>
+                          <Typography variant="body2" sx={{
+                            color: cliente.dias_atraso > 65 ? '#ef4444' : '#f59e0b',
                             fontWeight: 800,
                             fontSize: '1.2rem',
                             letterSpacing: '0.1em',
                             fontFamily: 'monospace'
                           }}>
-                            {cliente.diasSinComprar} días
+                            {cliente.dias_atraso} días
                           </Typography>
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={`Ticket promedio: ${formatTicketPromedio(cliente.ticketPromedio)}`} arrow>
-                          <Typography variant="body2" sx={{ 
-                            color: theme.palette.text.primary, 
-                            fontWeight: 800, 
+                        <Tooltip title={`Ticket promedio: ${formatTicketPromedio(cliente.pedidos > 0 ? cliente.total_comprado / cliente.pedidos : 0)}`} arrow>
+                          <Typography variant="body2" sx={{
+                            color: theme.palette.text.primary,
+                            fontWeight: 800,
                             fontSize: '1.2rem',
                             letterSpacing: '0.1em',
                             fontFamily: 'monospace'
                           }}>
-                            {formatTicketPromedio(cliente.ticketPromedio)}
+                            {formatTicketPromedio(cliente.pedidos > 0 ? cliente.total_comprado / cliente.pedidos : 0)}
                           </Typography>
                         </Tooltip>
                       </TableCell>
@@ -1262,7 +1265,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 </TableHead>
                 <TableBody>
                   {clientesVipData
-                    .sort((a, b) => b.totalComprado - a.totalComprado)
+                    .sort((a, b) => b.total_comprado - a.total_comprado)
                     .map((cliente) => (
                     <TableRow key={cliente.id} sx={{ 
                       '&:hover': { 
@@ -1295,23 +1298,23 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={`Total comprado: ${formatTicketPromedio(cliente.totalComprado)}`} arrow>
-                          <Typography variant="body2" sx={{ 
-                            color: theme.palette.text.primary, 
-                            fontWeight: 800, 
+                        <Tooltip title={`Total comprado: ${formatTicketPromedio(cliente.total_comprado)}`} arrow>
+                          <Typography variant="body2" sx={{
+                            color: theme.palette.text.primary,
+                            fontWeight: 800,
                             fontSize: '1.2rem',
                             letterSpacing: '0.1em',
                             fontFamily: 'monospace'
                           }}>
-                            {formatTicketPromedio(cliente.totalComprado)}
+                            {formatTicketPromedio(cliente.total_comprado)}
                           </Typography>
                         </Tooltip>
                       </TableCell>
                       <TableCell>
                         <Tooltip title={`Número de pedidos: ${cliente.pedidos}`} arrow>
-                          <Typography variant="body2" sx={{ 
-                            color: theme.palette.text.primary, 
-                            fontWeight: 800, 
+                          <Typography variant="body2" sx={{
+                            color: theme.palette.text.primary,
+                            fontWeight: 800,
                             fontSize: '1.2rem',
                             letterSpacing: '0.1em',
                             fontFamily: 'monospace'
@@ -1321,15 +1324,15 @@ export default function Clientes({ refreshTrigger = 0 }) {
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={`Ticket promedio: ${formatTicketPromedio(cliente.ticketPromedio)}`} arrow>
-                          <Typography variant="body2" sx={{ 
-                            color: theme.palette.text.primary, 
-                            fontWeight: 800, 
+                        <Tooltip title={`Ticket promedio: ${formatTicketPromedio(cliente.pedidos > 0 ? cliente.total_comprado / cliente.pedidos : 0)}`} arrow>
+                          <Typography variant="body2" sx={{
+                            color: theme.palette.text.primary,
+                            fontWeight: 800,
                             fontSize: '1.2rem',
                             letterSpacing: '0.1em',
                             fontFamily: 'monospace'
                           }}>
-                            {formatTicketPromedio(cliente.ticketPromedio)}
+                            {formatTicketPromedio(cliente.pedidos > 0 ? cliente.total_comprado / cliente.pedidos : 0)}
                           </Typography>
                         </Tooltip>
                       </TableCell>
