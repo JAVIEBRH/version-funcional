@@ -145,12 +145,20 @@ def calcular_riesgo_clientes(pedidos: List[Dict]) -> Dict:
             umbral_inactivo = cadencia * UMBRAL_INACTIVO_RATIO
         else:
             # Un solo pedido histórico: no hay cadencia propia que calcular.
-            dias_atraso = 0
             probabilidad = None
             # Un solo pedido histórico == cliente de baja frecuencia == segmento
             # 'nuevo' en términos RFM; se usa su umbral como respaldo, tal
             # como pide la spec.
             umbral_inactivo = SEGMENTOS['nuevo']['churn_dias']
+            # Sin cadencia propia no hay un punto de referencia personal para
+            # medir el atraso; se usa el mismo ratio que separa "en_riesgo" de
+            # "inactivo" en el camino multi-pedido (umbral_inactivo = cadencia
+            # * UMBRAL_INACTIVO_RATIO) para derivar una cadencia equivalente,
+            # en vez de forzar dias_atraso a 0 (lo que dejaba a estos clientes
+            # eternamente 'activo' sin importar cuánto tiempo llevaran sin
+            # comprar).
+            cadencia_equivalente = umbral_inactivo / UMBRAL_INACTIVO_RATIO
+            dias_atraso = max(0, recencia_dias - round(cadencia_equivalente))
 
         if probabilidad is None:
             probabilidad = PROBABILIDAD_RESPALDO_AL_DIA if dias_atraso <= 0 else PROBABILIDAD_RESPALDO_ATRASADO

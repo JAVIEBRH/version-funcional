@@ -82,6 +82,17 @@ def test_cliente_con_un_solo_pedido_no_rompe():
     assert cliente['cadencia_personal_dias'] is None
 
 
+def test_cliente_un_solo_pedido_muy_antiguo_no_queda_activo():
+    hoy = datetime.now()
+    # Un único pedido histórico, hace mucho más que el umbral 'nuevo' (45 días)
+    # -> no puede quedar 'activo' para siempre.
+    pedidos = [_pedido('unico_viejo@test.cl', hoy - timedelta(days=200))]
+    resultado = crs.calcular_riesgo_clientes(pedidos)
+    cliente = next(c for c in resultado['clientes'] if c['usuario'] == 'unico_viejo@test.cl')
+    assert cliente['estado'] != 'activo'
+    assert cliente['cadencia_personal_dias'] is None
+
+
 def test_lista_vacia_no_rompe():
     resultado = crs.calcular_riesgo_clientes([])
     assert resultado == {'resumen': {'activos': 0, 'en_riesgo': 0, 'inactivos': 0}, 'clientes': []}

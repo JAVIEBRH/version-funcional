@@ -6,7 +6,8 @@ from fastapi.exceptions import RequestValidationError
 import requests
 import pandas as pd
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime, timedelta
+import calendar
+from datetime import date, datetime, timedelta
 import json
 import numpy as np
 import warnings
@@ -2866,8 +2867,19 @@ def get_predictor_demanda():
         df = df[df['nombrelocal'].astype(str).str.strip().str.lower() == 'aguas ancud']
     pedidos_filtrados = df.to_dict('records')
 
-    dias_7 = demand_forecast_service.predecir_proximos_dias(pedidos_filtrados, dias=7)
+    # Días calendario que faltan en el mes actual (incluyendo hoy), para que
+    # la proyección de fin de mes cubra el mes completo y no solo 7 días.
+    hoy = datetime.now().date()
+    ultimo_dia_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+    dias_restantes = (date(hoy.year, hoy.month, ultimo_dia_mes) - hoy).days
+    horizonte = max(7, dias_restantes)
+
+    dias_horizonte = demand_forecast_service.predecir_proximos_dias(pedidos_filtrados, dias=horizonte)
     validacion = demand_forecast_service.validar_precision(pedidos_filtrados, dias_test=30)
+
+    # El chart operativo de 7 días siempre usa exactamente los primeros 7
+    # días del mismo horizonte pronosticado (evita entrenar el modelo dos veces).
+    dias_7 = dias_horizonte[:7]
 
     if not dias_7:
         return {
@@ -2879,15 +2891,15 @@ def get_predictor_demanda():
     manana = dias_7[0]
 
     # Proyección de fin de mes: ventas reales ya ocurridas este mes +
-    # la suma de las predicciones diarias para los días restantes.
-    hoy = datetime.now().date()
+    # la suma de las predicciones diarias para los días restantes del mes
+    # (no solo los que caben en el horizonte de 7 días del chart operativo).
     inicio_mes = hoy.replace(day=1)
     df['fecha_dt'] = df['fecha'].apply(lambda f: pd.to_datetime(f, format='%d-%m-%Y', errors='coerce'))
     df['precio_num'] = pd.to_numeric(df.get('precio', 0), errors='coerce').fillna(0)
     ventas_mes_actual = float(df[df['fecha_dt'].dt.date >= inicio_mes]['precio_num'].sum())
     ticket_promedio = float(df['precio_num'].mean()) if len(df) else 2000.0
 
-    dias_restantes_mes = [d for d in dias_7 if datetime.strptime(d['fecha'], '%Y-%m-%d').date().month == hoy.month]
+    dias_restantes_mes = [d for d in dias_horizonte if datetime.strptime(d['fecha'], '%Y-%m-%d').date().month == hoy.month]
     proyeccion_pedidos_p10 = sum(d['p10'] for d in dias_restantes_mes)
     proyeccion_pedidos_p50 = sum(d['p50'] for d in dias_restantes_mes)
     proyeccion_pedidos_p90 = sum(d['p90'] for d in dias_restantes_mes)

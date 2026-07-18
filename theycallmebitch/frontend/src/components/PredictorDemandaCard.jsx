@@ -43,7 +43,7 @@ export default function PredictorDemandaCard({ data }) {
   const precision = data?.precision_historica_pct;
 
   const chartData = dias7.map(d => ({
-    name: DIAS_SEMANA[new Date(d.fecha).getDay()],
+    name: DIAS_SEMANA[new Date(d.fecha + 'T00:00:00').getDay()],
     p10: d.p10,
     p50: d.p50,
     p90: d.p90,
