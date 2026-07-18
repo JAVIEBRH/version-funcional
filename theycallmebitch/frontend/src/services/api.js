@@ -2,7 +2,7 @@
 // Funciones para consumir la API del backend (FastAPI)
 
 // URL dinámica que funciona en desarrollo y producción
-const API_URL = import.meta.env.VITE_API_URL || 'https://backenddashboard-vh7d.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 // Modo desarrollo (solo loguear en desarrollo)
 const IS_DEV = import.meta.env.DEV;
@@ -162,7 +162,7 @@ export async function getKpis() {
     }
     const res = await fetchWithRetry(`${API_URL}/kpis`);
     const data = await res.json();
-    
+
     // Validar estructura básica de KPIs
     if (!data || typeof data !== 'object') {
       if (IS_DEV) {
@@ -181,7 +181,7 @@ export async function getKpis() {
         clientes_activos: 0,
       };
     }
-    
+
     if (IS_DEV) {
       console.log('KPIs obtenidos exitosamente');
     }
@@ -204,57 +204,46 @@ export async function getKpis() {
   }
 }
 
-export async function getPredictorInteligente(fecha, tipoCliente = 'residencial') {
+export const getPredictorDemanda = async () => {
   try {
-    if (IS_DEV) {
-      console.log('Intentando obtener predicción inteligente para:', fecha, tipoCliente);
-    }
-    const res = await fetchWithRetry(`${API_URL}/predictor-inteligente?fecha=${fecha}&tipo_cliente=${tipoCliente}`);
-    const data = await res.json();
-    
-    if (IS_DEV) {
-      console.log('Predicción inteligente obtenida exitosamente:', data);
-    }
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo predicción inteligente:', error);
-    // Retornar predicción vacía en lugar de lanzar error
-    return {
-      fecha: fecha,
-      tipo_cliente: tipoCliente,
-      pedidos_predichos: 0,
-      confianza: 0,
-      factores: {}
-    };
-  }
-}
-
-export async function getValidacionPredictor(diasTest = 7) {
-  try {
-    console.log('Obteniendo validación del predictor...');
-    const res = await fetch(`${API_URL}/validacion-predictor?dias_test=${diasTest}`);
-    if (!res.ok) {
-      throw new Error(`Error ${res.status}: ${res.statusText}`);
-    }
-    const data = await res.json();
-    console.log('Validación del predictor obtenida:', data);
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo validación del predictor:', error);
-    throw error;
-  }
-}
-
-export const getFactoresPrediccion = async () => {
-  try {
-    const response = await fetch(`${API_URL}/factores-prediccion`);
+    const response = await fetch(`${API_URL}/predictor/demanda`);
     if (!response.ok) {
-      throw new Error('Error al obtener factores de predicción');
+      throw new Error('Error al obtener el pronóstico de demanda');
     }
     return await response.json();
   } catch (error) {
-    console.error('Error obteniendo factores de predicción:', error);
-    return {};
+    console.error('Error obteniendo pronóstico de demanda:', error);
+    return { manana: null, dias_7: [], proyeccion_mes: null, precision_historica_pct: null, dias_evaluados: 0 };
+  }
+};
+
+export const getPredictorClientesRiesgo = async () => {
+  try {
+    const response = await fetch(`${API_URL}/predictor/clientes-riesgo`);
+    if (!response.ok) {
+      throw new Error('Error al obtener clientes en riesgo');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error obteniendo clientes en riesgo:', error);
+    return { resumen: { activos: 0, en_riesgo: 0, inactivos: 0 }, clientes: [] };
+  }
+};
+
+
+
+
+export const getHeatmap = async (meses) => {
+  try {
+    const query = meses ? `?meses=${meses}` : '';
+    const response = await fetch(`${API_URL}/heatmap${query}`);
+    if (!response.ok) {
+      throw new Error('Error al obtener datos del heatmap');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error obteniendo datos del heatmap:', error);
+    return [];
   }
 };
 
@@ -284,69 +273,9 @@ export const getVentasTotalesHistoricas = async () => {
   }
 }; 
 
-export async function getTrackingMetricas() {
-  try {
-    const res = await fetch(`${API_URL}/tracking/metricas`);
-    if (!res.ok) {
-      throw new Error(`Error ${res.status}: ${res.statusText}`);
-    }
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo métricas de tracking:', error);
-    throw error;
-  }
-}
 
-export async function getTrackingReporte() {
-  try {
-    const res = await fetch(`${API_URL}/tracking/reporte`);
-    if (!res.ok) {
-      throw new Error(`Error ${res.status}: ${res.statusText}`);
-    }
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo reporte de tracking:', error);
-    throw error;
-  }
-}
 
-export async function registrarPedidosReales(fecha, pedidosReales, tipoCliente = 'general') {
-  try {
-    const params = new URLSearchParams({
-      fecha: fecha,
-      pedidos_reales: pedidosReales,
-      tipo_cliente: tipoCliente
-    });
-    
-    const res = await fetch(`${API_URL}/tracking/registrar-pedidos-reales?${params}`, {
-      method: 'POST'
-    });
-    if (!res.ok) {
-      throw new Error(`Error ${res.status}: ${res.statusText}`);
-    }
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error('Error registrando pedidos reales:', error);
-    throw error;
-  }
-}
 
-export async function getUltimasPredicciones(dias = 7) {
-  try {
-    const res = await fetch(`${API_URL}/tracking/ultimas-predicciones?dias=${dias}`);
-    if (!res.ok) {
-      throw new Error(`Error ${res.status}: ${res.statusText}`);
-    }
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error('Error obteniendo últimas predicciones:', error);
-    throw error;
-  }
-} 
 
 export const getVentasDiarias = async () => {
   try {
