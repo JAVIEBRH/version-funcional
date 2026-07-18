@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 import requests
 import pandas as pd
@@ -21,6 +22,23 @@ logger = logging.getLogger(__name__)
 # Importar nuevos modelos
 from models import Order, OrderResponse, OrderCreate, convert_legacy_order, order_to_response
 from data_adapter import data_adapter
+from pydantic import BaseModel
+from services.ai_engine import run_autonomous_insight, run_chat_query, run_chat_query_prepare
+from services.business_context import build_business_context
+from services.rfm_engine import calcular_rfm
+from services.zone_engine import analizar_zonas
+from services.weather_service import obtener_clima
+from services.fuel_service import obtener_precio_bencina
+from services.memory_service import (
+    inicializar_db, guardar_insight, guardar_snapshot_kpis,
+    obtener_contexto_historico, guardar_briefing, obtener_briefing_hoy,
+    obtener_historial_insights, get_recent_recommendations, actualizar_recomendacion
+)
+from services.briefing_service import generar_briefing
+from services import geocoding_service
+from services import demand_forecast_service
+from services import customer_risk_service
+
 # from services.kpi_calculator import kpi_calculator
 # from utils.cache_manager import cache_manager
 
@@ -28,6 +46,8 @@ app = FastAPI(title="API Aguas Ancud", version="2.0")
 
 # Configuración de CORS para desarrollo y producción
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # Obtener origen permitido desde variable de entorno o usar valor por defecto
 CORS_ORIGIN = os.getenv("CORS_ORIGIN", "http://localhost:5173")
@@ -291,10 +311,8 @@ def obtener_datos_hibridos():
         
     except Exception as e:
         logger.error(f"Error obteniendo datos híbridos: {e}", exc_info=True)
-        # Fallback al endpoint antiguo
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        return response.json()
+        # Fallback al data_adapter
+        return data_adapter.obtener_pedidos_combinados()
 
 @app.get("/pedidos", response_model=List[Dict])
 def get_pedidos():
@@ -485,6 +503,10 @@ def get_kpis():
     df = pd.DataFrame(pedidos)
     logger.info(f"Total de pedidos para KPIs: {len(df)}")
     
+    if 'nombrelocal' in df.columns:
+        df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
+        logger.info(f"Total de pedidos post filtro Aguas Ancud: {len(df)}")
+    
     if df.empty or 'fecha' not in df.columns:
         logger.warning("DataFrame vacío o sin columna fecha")
         return {
@@ -545,21 +567,35 @@ def get_kpis():
             total_bidones_mes_pasado = pedidos_mes_pasado['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
         else:
             total_bidones_mes_pasado = len(pedidos_mes_pasado)
-        
+
         # Cálculo de costos según especificaciones
         cuota_camion = 260000
         costo_tapa = 51
-        costo_tapa_con_iva = costo_tapa * 1.19
+        costo_tapa_con_iva = costo_tapa * 1.19  # 51 * 1.19 = 60.69
         costos_variables = costo_tapa_con_iva * total_bidones_mes
         costos_reales = cuota_camion + costos_variables
-        
+
+        # Cálculo de costos mes pasado
+        costos_variables_pasado = costo_tapa_con_iva * total_bidones_mes_pasado
+        costos_reales_pasado = cuota_camion + costos_variables_pasado
+
         # Cálculo de IVA
-        iva_ventas = ventas_mes * 0.19
-        iva_tapas = (costo_tapa * total_bidones_mes) * 0.19
+        # El precio de venta ($2.000) incluye IVA → se extrae el débito fiscal
+        iva_ventas = (ventas_mes / 1.19) * 0.19
+        iva_tapas = costo_tapa * total_bidones_mes * 0.19  # crédito fiscal tapas
         iva = iva_ventas - iva_tapas
-        
+
+        # Cálculo de IVA mes pasado
+        iva_ventas_pasado = (ventas_mes_pasado / 1.19) * 0.19
+        iva_tapas_pasado = costo_tapa * total_bidones_mes_pasado * 0.19
+        iva_mes_pasado = iva_ventas_pasado - iva_tapas_pasado
+
         # Cálculo de utilidad
         utilidad = ventas_mes - costos_reales
+        utilidad_mes_pasado = ventas_mes_pasado - costos_reales_pasado
+
+        # Ticket promedio mes pasado
+        ticket_promedio_mes_pasado = int(ventas_mes_pasado / len(pedidos_mes_pasado)) if len(pedidos_mes_pasado) > 0 else 0
         
         # Cálculo punto de equilibrio
         try:
@@ -572,9 +608,39 @@ def get_kpis():
         litros_vendidos = total_bidones_mes * 20
         capacidad_utilizada_porcentaje = min(100, (litros_vendidos / capacidad_total_litros) * 100)
         
-        # Cálculo clientes activos últimos 2 meses
-        clientes_ultimos_2m = pd.concat([pedidos_mes, pedidos_mes_pasado])
-        clientes_activos = len(clientes_ultimos_2m['usuario'].unique()) if 'usuario' in clientes_ultimos_2m.columns else 0
+        # Clientes activos: compraron en los últimos 75 días (alineado con página Clientes)
+        hace_75 = hoy - timedelta(days=75)
+        if 'fecha_parsed' in df.columns and 'usuario' in df.columns:
+            pedidos_75d = df[df['fecha_parsed'] >= hace_75]
+            clientes_activos = len(pedidos_75d['usuario'].unique())
+        else:
+            clientes_activos = len(pedidos_mes['usuario'].unique()) if 'usuario' in pedidos_mes.columns else 0
+
+        # Clientes inactivos: no compraron en los últimos 75 días pero sí antes
+        if 'fecha_parsed' in df.columns and 'usuario' in df.columns:
+            usuarios_activos_75d = set(pedidos_75d['usuario'].unique())
+            usuarios_historicos = set(df['usuario'].unique())
+            clientes_inactivos = len(usuarios_historicos - usuarios_activos_75d)
+        elif 'usuario' in pedidos_mes.columns and 'usuario' in pedidos_mes_pasado.columns:
+            usuarios_mes_actual = set(pedidos_mes['usuario'].unique())
+            usuarios_mes_pasado_set = set(pedidos_mes_pasado['usuario'].unique())
+            clientes_inactivos = len(usuarios_mes_pasado_set - usuarios_mes_actual)
+        else:
+            clientes_inactivos = 0
+
+        clientes_activos_mes_pasado = len(pedidos_mes_pasado['usuario'].unique()) if 'usuario' in pedidos_mes_pasado.columns else 0
+
+        # Clientes inactivos mes pasado: mismo criterio de 75 días, evaluado al cierre del mes anterior
+        if 'fecha_parsed' in df.columns and 'usuario' in df.columns:
+            fin_mes_pasado = datetime(anio_actual, mes_actual, 1) - timedelta(days=1)
+            hace_75_mes_pasado = fin_mes_pasado - timedelta(days=75)
+            historicos_a_fin_mes_pasado = df[df['fecha_parsed'] <= fin_mes_pasado]
+            activos_75d_mes_pasado = historicos_a_fin_mes_pasado[historicos_a_fin_mes_pasado['fecha_parsed'] > hace_75_mes_pasado]
+            usuarios_activos_75d_pasado = set(activos_75d_mes_pasado['usuario'].unique())
+            usuarios_historicos_pasado = set(historicos_a_fin_mes_pasado['usuario'].unique())
+            clientes_inactivos_mes_pasado = len(usuarios_historicos_pasado - usuarios_activos_75d_pasado)
+        else:
+            clientes_inactivos_mes_pasado = 0
         
         # Calcular porcentaje de cambio
         cambio_ventas_porcentaje = 0
@@ -596,9 +662,16 @@ def get_kpis():
             "utilidad": int(utilidad),
             "punto_equilibrio": punto_equilibrio,
             "clientes_activos": clientes_activos,
+            "clientes_activos_mes_pasado": clientes_activos_mes_pasado,
+            "clientes_inactivos": clientes_inactivos,
+            "clientes_inactivos_mes_pasado": clientes_inactivos_mes_pasado,
             "capacidad_utilizada": round(capacidad_utilizada_porcentaje, 1),
             "litros_vendidos": int(litros_vendidos),
             "capacidad_total": capacidad_total_litros,
+            "iva_mes_pasado": int(iva_mes_pasado),
+            "utilidad_mes_pasado": int(utilidad_mes_pasado),
+            "ticket_promedio_mes_pasado": ticket_promedio_mes_pasado,
+            "costos_reales_mes_pasado": int(costos_reales_pasado),
         }
         
         # Calcular tiempo de respuesta
@@ -626,13 +699,316 @@ def get_kpis():
             "clientes_activos": 0,
         } 
 
+GLOBAL_INSIGHTS = []
+
+def _build_full_context():
+    """Construye contexto completo con todos los módulos."""
+    try:
+        kpis_data = get_kpis()
+    except Exception as e:
+        logger.error(f"Error obteniendo KPIs para contexto: {e}")
+        kpis_data = {}
+
+    pedidos = []
+    try:
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        rfm_data = calcular_rfm(pedidos)
+    except Exception as e:
+        logger.error(f"Error calculando RFM: {e}")
+        rfm_data = {}
+
+    try:
+        zonas_data = analizar_zonas(pedidos)
+    except Exception as e:
+        logger.error(f"Error analizando zonas: {e}")
+        zonas_data = {}
+
+    try:
+        clima_data = obtener_clima()
+    except Exception as e:
+        logger.error(f"Error obteniendo clima: {e}")
+        clima_data = {}
+
+    try:
+        memoria_data = obtener_contexto_historico(dias=30)
+    except Exception as e:
+        logger.error(f"Error obteniendo memoria: {e}")
+        memoria_data = {}
+
+    try:
+        recs_recientes = get_recent_recommendations(limit=3)
+    except Exception:
+        recs_recientes = []
+
+    ctx = build_business_context(kpis_data, rfm=rfm_data, zonas=zonas_data, clima=clima_data, memoria=memoria_data)
+    ctx["recomendaciones_recientes"] = [
+        {
+            "tipo": r.get("tipo"),
+            "descripcion": r.get("descripcion", "")[:120],
+            "ejecutada": bool(r.get("ejecutada")),
+            "resultado": r.get("resultado", ""),
+            "fecha": r.get("timestamp", "")[:10],
+        }
+        for r in recs_recientes
+    ]
+    return ctx
+
+
+async def ai_autonomous_loop():
+    """Background task CEO autónomo con contexto completo."""
+    logger.info("AI CEO Modo Dios inicializado")
+
+    # Primera pasada inmediata
+    try:
+        context = _build_full_context()
+        nuevas_alertas = run_autonomous_insight(context)
+        if nuevas_alertas:
+            global GLOBAL_INSIGHTS
+            GLOBAL_INSIGHTS = nuevas_alertas
+            for insight in nuevas_alertas:
+                guardar_insight(insight, context)
+        guardar_snapshot_kpis(context)
+    except Exception as e:
+        logger.error(f"Error AI CEO Inicial: {e}")
+
+    while True:
+        try:
+            # 15 minutos — balance costo/frescura
+            await asyncio.sleep(900)
+            context = _build_full_context()
+            nuevas_alertas = run_autonomous_insight(context)
+            if nuevas_alertas:
+                GLOBAL_INSIGHTS = (nuevas_alertas + GLOBAL_INSIGHTS)[:8]
+                for insight in nuevas_alertas:
+                    guardar_insight(insight, context)
+                logger.info(f"AI CEO generó {len(nuevas_alertas)} nuevos insights.")
+            guardar_snapshot_kpis(context)
+        except Exception as e:
+            logger.error(f"Error en AI CEO Loop: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    inicializar_db()
+    asyncio.create_task(ai_autonomous_loop())
+
+@app.get("/insights")
+def get_autonomous_insights():
+    return JSONResponse(content=GLOBAL_INSIGHTS)
+
+class ChatMessage(BaseModel):
+    role: str   # "user" | "agent"
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+class RecomendacionFeedback(BaseModel):
+    ejecutada: bool
+    resultado: str = ""
+
+@app.post("/chat")
+def chat_with_agent(req: ChatRequest):
+    """Chat con el CEO virtual — function calling, caché y guardia de tokens."""
+    try:
+        pedidos  = data_adapter.obtener_pedidos_combinados()
+        context  = _build_full_context()
+        history  = [{"role": m.role, "content": m.content} for m in req.history]
+        respuesta = run_chat_query(context, req.message, history=history, pedidos_cache=pedidos)
+
+        try:
+            with open("chat_history.log", "a", encoding="utf-8") as f:
+                t = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"=== {t} ===\nUSUARIO: {req.message}\nAGENTE: {respuesta}\n\n")
+        except Exception:
+            pass
+
+        return {"response": respuesta}
+    except Exception as e:
+        logger.error(f"Error en /chat: {e}")
+        return {"response": f"Error procesando consulta: {str(e)}"}
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """Streaming SSE del CEO virtual con function calling."""
+    async def event_generator():
+        try:
+            pedidos = await asyncio.to_thread(data_adapter.obtener_pedidos_combinados)
+            context = await asyncio.to_thread(_build_full_context)
+            history = [{"role": m.role, "content": m.content} for m in req.history]
+
+            # Fase A: resolver tools silenciosamente
+            final_conv, tools_used = await asyncio.to_thread(
+                run_chat_query_prepare,
+                context, req.message, history, pedidos,
+            )
+
+            # Emitir qué tools se usaron
+            for tool_name in tools_used:
+                yield f"data: {json.dumps({'tool': tool_name})}\n\n"
+
+            # Fase B: streaming de la respuesta final
+            from openai import OpenAI
+            oai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
+            stream = oai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=final_conv,
+                temperature=0.25,
+                max_tokens=1200,
+                stream=True,
+            )
+
+            accumulated = ""
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    accumulated += delta
+                    yield f"data: {json.dumps({'token': delta})}\n\n"
+
+            # Generar preguntas sugeridas (llamada rápida post-stream)
+            try:
+                sq_resp = oai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Genera exactamente 3 preguntas de seguimiento cortas en español "
+                                "(máx 10 palabras cada una) relevantes para continuar este análisis. "
+                                "Responde SOLO con un JSON array de strings, sin markdown."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Pregunta: {req.message}\nRespuesta: {accumulated[:400]}",
+                        },
+                    ],
+                    max_tokens=100,
+                    temperature=0.4,
+                )
+                raw_sq = sq_resp.choices[0].message.content.strip()
+                suggested = json.loads(raw_sq)
+                if isinstance(suggested, list):
+                    yield f"data: {json.dumps({'suggested_questions': suggested[:3]})}\n\n"
+            except Exception:
+                pass
+
+            # Meta final (is_campaign, tools usados)
+            is_campaign = "draft_campaign_message" in tools_used
+            yield f"data: {json.dumps({'meta': {'tools_used': tools_used, 'is_campaign': is_campaign}})}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+@app.patch("/recommendations/{rec_id}")
+def update_recommendation(rec_id: int, feedback: RecomendacionFeedback):
+    """Marca una recomendación como ejecutada y guarda el resultado."""
+    try:
+        actualizar_recomendacion(rec_id, feedback.ejecutada, feedback.resultado)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/recommendations")
+def list_recommendations():
+    """Retorna las últimas recomendaciones generadas por el agente."""
+    try:
+        return get_recent_recommendations(limit=10)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/rfm")
+def get_rfm():
+    """Análisis RFM completo de clientes."""
+    try:
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        return calcular_rfm(pedidos)
+    except Exception as e:
+        logger.error(f"Error en /rfm: {e}")
+        return {}
+
+
+@app.get("/zonas")
+def get_zonas():
+    """Análisis geográfico de zonas de Ancud."""
+    try:
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        return analizar_zonas(pedidos)
+    except Exception as e:
+        logger.error(f"Error en /zonas: {e}")
+        return {}
+
+
+@app.get("/clima")
+def get_clima():
+    """Clima actual de Ancud + multiplicador de demanda."""
+    try:
+        return obtener_clima()
+    except Exception as e:
+        logger.error(f"Error en /clima: {e}")
+        return {}
+
+
+@app.get("/bencina")
+def get_bencina():
+    """Precio actual bencina 93 octanos CLP/litro. Cache 24h. Fuente: CNE/ENAP."""
+    try:
+        return obtener_precio_bencina()
+    except Exception as e:
+        logger.error(f"Error en /bencina: {e}")
+        return {"precio_litro": 1097, "octanaje": 93, "fuente": "fallback", "cached": True,
+                "precio_litro_anterior": 1097, "variacion_pct": 0}
+
+
+@app.get("/briefing")
+def get_briefing():
+    """Briefing ejecutivo del día. Se genera una vez al día y se cachea."""
+    try:
+        # Si ya se generó hoy, retornar el cacheado
+        briefing_existente = obtener_briefing_hoy()
+        if briefing_existente:
+            return {"briefing": briefing_existente, "cached": True}
+
+        # Generar nuevo briefing
+        context = _build_full_context()
+        contenido = generar_briefing(context)
+        guardar_briefing(contenido, context)
+        return {"briefing": contenido, "cached": False}
+    except Exception as e:
+        logger.error(f"Error en /briefing: {e}")
+        return {"briefing": "Error generando briefing.", "cached": False}
+
+
+@app.get("/memoria/historial")
+def get_historial_insights():
+    """Retorna historial de insights generados por el agente."""
+    try:
+        return {"historial": obtener_historial_insights(limite=20)}
+    except Exception as e:
+        logger.error(f"Error en /memoria/historial: {e}")
+        return {"historial": []}
+
 @app.get("/clientes_vip", response_model=Dict)
 def get_clientes_vip():
     """Devuelve los 15 clientes que más dinero han aportado y los 15 con mayor frecuencia de compra (solo Aguas Ancud)"""
     try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
+        pedidos = data_adapter.obtener_pedidos_combinados()
     except Exception as e:
         logger.error(f"Error al obtener pedidos para clientes VIP: {e}", exc_info=True)
         return {"vip": [], "frecuentes": []}
@@ -668,313 +1044,117 @@ def get_clientes_vip():
     return {"vip": vip_list, "frecuentes": frecuentes_list} 
 
 @app.get("/heatmap", response_model=List[Dict])
-def get_heatmap(mes: int = Query(None), anio: int = Query(None)):
+def get_heatmap(background_tasks: BackgroundTasks, meses: int = Query(None, description="Ventana de últimos N meses desde hoy; si se omite, se usa todo el histórico")):
     """Devuelve coordenadas de pedidos de Aguas Ancud para el heatmap"""
     try:
-        pedidos_resp = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        pedidos_resp.raise_for_status()
-        pedidos = pedidos_resp.json()
+        pedidos = data_adapter.obtener_pedidos_combinados()
     except Exception as e:
         logger.error(f"Error al obtener pedidos para heatmap: {e}", exc_info=True)
         return []
-    
+
     df_pedidos = pd.DataFrame(pedidos)
     logger.info(f"Pedidos totales: {len(df_pedidos)}")
-    
+
     if 'nombrelocal' in df_pedidos.columns:
         df_pedidos = df_pedidos[df_pedidos['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
     logger.debug(f"Pedidos Aguas Ancud: {len(df_pedidos)}")
-    
-    # Solo aplicar filtro de mes/año si se proporcionan ambos parámetros
-    if mes is not None and anio is not None:
+
+    # Ventana real de "últimos N meses" (antes se filtraba por un único mes/año
+    # exacto, así que "Últimos 3/6 meses" en realidad solo mostraba un mes puntual).
+    if meses is not None:
         df_pedidos['fecha_dt'] = pd.to_datetime(df_pedidos['fecha'], format='%d-%m-%Y', errors='coerce')
-        df_pedidos = df_pedidos[(df_pedidos['fecha_dt'].dt.month == mes) & (df_pedidos['fecha_dt'].dt.year == anio)]
-        logger.debug(f"Pedidos tras filtro mes/año ({mes}/{anio}): {len(df_pedidos)}")
+        fecha_corte = pd.Timestamp(datetime.now()) - pd.DateOffset(months=meses)
+        df_pedidos = df_pedidos[df_pedidos['fecha_dt'] >= fecha_corte]
+        logger.debug(f"Pedidos tras filtro de últimos {meses} meses: {len(df_pedidos)}")
     else:
-        logger.debug("No se aplicó filtro de mes/año - mostrando todos los datos disponibles")
+        logger.debug("No se aplicó filtro de período - mostrando todos los datos disponibles")
     
     if df_pedidos.empty:
         logger.warning("No hay pedidos después del filtro")
         return []
-    
-    # Verificar si hay columnas de coordenadas
-    coord_columns = [col for col in df_pedidos.columns if 'lat' in col.lower() or 'lon' in col.lower() or 'lng' in col.lower()]
-    logger.debug(f"Columnas de coordenadas encontradas: {coord_columns}")
-    
-    # Si no hay coordenadas reales, generar basadas en dirección
-    if not coord_columns or df_pedidos[coord_columns].isnull().all().all():
-        logger.info("No hay coordenadas reales, generando basadas en dirección...")
-        
-        if 'dire' in df_pedidos.columns:
-            # Agrupar por dirección y contar pedidos
-            df_pedidos['dire_norm'] = df_pedidos['dire'].str.strip().str.lower()
-            direcciones_unicas = df_pedidos.groupby('dire_norm').agg({
-                'usuario': 'first',
-                'telefonou': 'first',
-                'precio': 'sum'
-            }).reset_index()
-            
-            logger.debug(f"Direcciones únicas encontradas: {len(direcciones_unicas)}")
-            
-            # Generar coordenadas basadas en hash de dirección
-            def generate_coordinates_from_address(address):
-                if pd.isna(address) or address == '':
-                    return None
-                
-                # Hash simple de la dirección
-                hash_val = sum(ord(c) for c in str(address))
-                
-                # Coordenadas base en Puente Alto, Santiago
-                base_lat = -33.6167
-                base_lng = -70.5833
-                
-                # Variación basada en hash (más pequeña para mantener en la zona)
-                lat_variation = (hash_val % 1000) / 50000  # ±0.02 grados
-                lng_variation = ((hash_val * 2) % 1000) / 50000  # ±0.02 grados
-                
-                return {
-                    'lat': base_lat + lat_variation,
-                    'lng': base_lng + lng_variation
-                }
-            
-            # Generar coordenadas para cada dirección única
-            heatmap_data = []
-            for _, row in direcciones_unicas.iterrows():
-                coords = generate_coordinates_from_address(row['dire_norm'])
-                if coords:
-                    # Calcular ticket promedio y fecha del último pedido para esta dirección
-                    pedidos_direccion = df_pedidos[df_pedidos['dire_norm'] == row['dire_norm']]
-                    
-                    # Convertir precio a numérico y calcular promedio
-                    precios_numericos = pd.to_numeric(pedidos_direccion['precio'], errors='coerce')
-                    ticket_promedio = precios_numericos.mean()
-                    
-                    fecha_ultimo_pedido = pedidos_direccion['fecha'].max()
-                    
-                    # Debug: información del cálculo (solo en modo debug)
-                    logger.debug(f"Dirección: {row['dire_norm']}")
-                    logger.debug(f"  - Pedidos encontrados: {len(pedidos_direccion)}")
-                    
-                    # Asegurar que los valores no sean NaN
-                    ticket_promedio_final = 0 if pd.isna(ticket_promedio) else float(ticket_promedio)
-                    fecha_ultimo_pedido_final = 'N/A' if pd.isna(fecha_ultimo_pedido) else str(fecha_ultimo_pedido)
-                    
-                    heatmap_data.append({
-                        'lat': coords['lat'],
-                        'lon': coords['lng'],
-                        'address': row['dire_norm'],
-                        'user': row['usuario'],
-                        'phone': row['telefonou'],
-                        'total_spent': row['precio'],
-                        'ticket_promedio': ticket_promedio_final,
-                        'fecha_ultimo_pedido': fecha_ultimo_pedido_final
-                    })
-            
-            logger.info(f"Puntos de calor generados: {len(heatmap_data)}")
-            return heatmap_data
-        else:
-            logger.warning("No se encontró columna 'dire' en los pedidos")
-            return []
-    else:
-        # Usar coordenadas reales
-        logger.info("Usando coordenadas reales de los pedidos...")
-        
-        # Identificar columnas de lat y lon
-        lat_col = None
-        lon_col = None
-        
-        for col in df_pedidos.columns:
-            if 'lat' in col.lower():
-                lat_col = col
-            elif 'lon' in col.lower() or 'lng' in col.lower():
-                lon_col = col
-        
-        if lat_col and lon_col:
-            # Filtrar pedidos con coordenadas válidas
-            df_coords = df_pedidos[df_pedidos[lat_col].notnull() & df_pedidos[lon_col].notnull()]
-            logger.info(f"Pedidos con coordenadas válidas: {len(df_coords)}")
-            
-            heatmap_data = []
-            for _, row in df_coords.iterrows():
-                try:
-                    lat = float(row[lat_col])
-                    lon = float(row[lon_col])
-                    
-                    # Calcular ticket promedio y fecha del último pedido para esta dirección
-                    direccion = row.get('dire', 'Sin dirección')
-                    pedidos_direccion = df_pedidos[df_pedidos['dire'] == direccion]
-                    
-                    # Convertir precio a numérico y calcular promedio
-                    precios_numericos = pd.to_numeric(pedidos_direccion['precio'], errors='coerce')
-                    ticket_promedio = precios_numericos.mean()
-                    
-                    fecha_ultimo_pedido = pedidos_direccion['fecha'].max()
-                    
-                    # Debug: información del cálculo (solo en modo debug)
-                    logger.debug(f"Dirección: {direccion}")
-                    logger.debug(f"  - Pedidos encontrados: {len(pedidos_direccion)}")
-                    
-                    # Asegurar que los valores no sean NaN
-                    ticket_promedio_final = 0 if pd.isna(ticket_promedio) else float(ticket_promedio)
-                    fecha_ultimo_pedido_final = 'N/A' if pd.isna(fecha_ultimo_pedido) else str(fecha_ultimo_pedido)
-                    
-                    heatmap_data.append({
-                        'lat': lat,
-                        'lon': lon,
-                        'address': direccion,
-                        'user': row.get('usuario', 'Sin usuario'),
-                        'phone': row.get('telefonou', 'Sin teléfono'),
-                        'total_spent': row.get('precio', 0),
-                        'ticket_promedio': ticket_promedio_final,
-                        'fecha_ultimo_pedido': fecha_ultimo_pedido_final
-                    })
-                except (ValueError, TypeError):
-                    continue
-            
-            logger.info(f"Puntos de calor con coordenadas reales: {len(heatmap_data)}")
-            return heatmap_data
-        else:
-            logger.warning("No se encontraron columnas de lat/lon válidas")
-            return []
 
-@app.get("/factores-prediccion", response_model=Dict)
-def get_factores_prediccion():
-    """Calcular factores de predicción basados en datos históricos reales"""
-    try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-    except Exception as e:
-        print("Error al obtener pedidos para factores:", e)
-        return {}
-    
-    df = pd.DataFrame(pedidos)
-    if 'nombrelocal' in df.columns:
-        df = df[df['nombrelocal'] == 'Aguas Ancud']
-    
-    if df.empty or 'fecha' not in df.columns:
-        return {}
-    
-    # Convertir fechas
-    df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
-    df = df.dropna(subset=['fecha_parsed'])
-    
-    # Agregar columnas para análisis
-    df['mes'] = df['fecha_parsed'].dt.month
-    df['dia_semana'] = df['fecha_parsed'].dt.dayofweek  # 0=lunes, 6=domingo
-    df['anio'] = df['fecha_parsed'].dt.year
-    
-    # 1. FACTOR TEMPORADA - Análisis por mes
-    pedidos_por_mes = df.groupby('mes')['precio'].count()
-    promedio_mensual = pedidos_por_mes.mean()
-    factores_temporada = {}
-    for mes in range(1, 13):
-        if mes in pedidos_por_mes.index:
-            factor = pedidos_por_mes[mes] / promedio_mensual
-            factores_temporada[mes-1] = round(factor, 2)  # mes-1 porque JavaScript usa 0-11
-        else:
-            factores_temporada[mes-1] = 1.0
-    
-    # 2. FACTOR ZONA - Análisis por dirección
-    def extraer_zona(direccion):
-        if not direccion or pd.isna(direccion):
-            return 'otro'
-        direccion_lower = str(direccion).lower()
-        if any(palabra in direccion_lower for palabra in ['centro', 'plaza', 'downtown']):
-            return 'centro'
-        elif any(palabra in direccion_lower for palabra in ['norte', 'north', 'arriba']):
-            return 'norte'
-        elif any(palabra in direccion_lower for palabra in ['sur', 'south', 'abajo']):
-            return 'sur'
-        elif any(palabra in direccion_lower for palabra in ['este', 'east', 'derecha']):
-            return 'este'
-        elif any(palabra in direccion_lower for palabra in ['oeste', 'west', 'izquierda']):
-            return 'oeste'
-        else:
-            return 'otro'
-    
-    df['zona'] = df['dire'].apply(extraer_zona)
-    pedidos_por_zona = df.groupby('zona')['precio'].count()
-    promedio_por_zona = pedidos_por_zona.mean()
-    factores_zona = {}
-    for zona in ['centro', 'norte', 'sur', 'este', 'oeste', 'otro']:
-        if zona in pedidos_por_zona.index:
-            factor = pedidos_por_zona[zona] / promedio_por_zona
-            factores_zona[zona] = round(factor, 2)
-        else:
-            factores_zona[zona] = 1.0
-    
-    # 3. FACTOR TIPO CLIENTE - Análisis por recurrencia
-    pedidos_por_cliente = df.groupby('usuario').size()
-    promedio_pedidos_cliente = pedidos_por_cliente.mean()
-    
-    def clasificar_tipo_cliente(num_pedidos):
-        if num_pedidos >= promedio_pedidos_cliente * 1.5:
-            return 'recurrente'
-        elif num_pedidos >= promedio_pedidos_cliente * 0.8:
-            return 'residencial'
-        elif num_pedidos >= promedio_pedidos_cliente * 0.5:
-            return 'nuevo'
-        else:
-            return 'empresa'  # Clientes con pocos pedidos pero de alto valor
-    
-    df['tipo_cliente'] = df['usuario'].map(pedidos_por_cliente).apply(clasificar_tipo_cliente)
-    pedidos_por_tipo = df.groupby('tipo_cliente')['precio'].count()
-    promedio_por_tipo = pedidos_por_tipo.mean()
-    factores_tipo_cliente = {}
-    for tipo in ['recurrente', 'residencial', 'nuevo', 'empresa']:
-        if tipo in pedidos_por_tipo.index:
-            factor = pedidos_por_tipo[tipo] / promedio_por_tipo
-            factores_tipo_cliente[tipo] = round(factor, 2)
-        else:
-            factores_tipo_cliente[tipo] = 1.0
-    
-    # 4. FACTOR DÍA SEMANA - Análisis por día
-    pedidos_por_dia = df.groupby('dia_semana')['precio'].count()
-    promedio_por_dia = pedidos_por_dia.mean()
-    factores_dia_semana = {}
-    for dia in range(7):
-        if dia in pedidos_por_dia.index:
-            factor = pedidos_por_dia[dia] / promedio_por_dia
-            factores_dia_semana[dia] = round(factor, 2)
-        else:
-            factores_dia_semana[dia] = 1.0
-    
-    # 5. FACTOR TENDENCIA - Crecimiento mensual
-    pedidos_por_mes_anio = df.groupby(['anio', 'mes'])['precio'].count()
-    if len(pedidos_por_mes_anio) >= 2:
-        # Calcular crecimiento promedio mensual
-        valores = list(pedidos_por_mes_anio.values)
-        crecimiento_mensual = 1.0
-        for i in range(1, len(valores)):
-            if valores[i-1] > 0:
-                crecimiento = valores[i] / valores[i-1]
-                crecimiento_mensual *= crecimiento
-        crecimiento_mensual = crecimiento_mensual ** (1.0 / (len(valores) - 1))
-    else:
-        crecimiento_mensual = 1.05  # 5% por defecto
-    
-    return {
-        "factores_temporada": factores_temporada,
-        "factores_zona": factores_zona,
-        "factores_tipo_cliente": factores_tipo_cliente,
-        "factores_dia_semana": factores_dia_semana,
-        "crecimiento_mensual": round(crecimiento_mensual, 3),
-        "promedio_pedidos_mensual": int(promedio_mensual),
-        "total_pedidos_analizados": len(df),
-        "periodo_analisis": {
-            "fecha_inicio": df['fecha_parsed'].min().strftime('%Y-%m-%d'),
-            "fecha_fin": df['fecha_parsed'].max().strftime('%Y-%m-%d')
+    if 'dire' not in df_pedidos.columns:
+        logger.warning("No se encontró columna 'dire' en los pedidos")
+        return []
+
+    # Ventas de mostrador (retiro en local) no tienen dirección de entrega —
+    # no corresponde ubicarlas en un mapa de reparto, se excluyen del todo.
+    df_pedidos['dire_norm'] = df_pedidos['dire'].fillna('').str.strip()
+    df_pedidos = df_pedidos[df_pedidos['dire_norm'] != '']
+    df_pedidos['precio_num'] = pd.to_numeric(df_pedidos['precio'], errors='coerce').fillna(0)
+
+    # Identificar columnas de lat/lon si existen
+    lat_col = next((c for c in df_pedidos.columns if 'lat' in c.lower()), None)
+    lon_col = next((c for c in df_pedidos.columns if 'lon' in c.lower() or 'lng' in c.lower()), None)
+    if lat_col and lon_col:
+        df_pedidos[lat_col] = pd.to_numeric(df_pedidos[lat_col], errors='coerce')
+        df_pedidos[lon_col] = pd.to_numeric(df_pedidos[lon_col], errors='coerce')
+
+    def construir_punto(direccion, grupo, lat, lon):
+        ticket_promedio = grupo['precio_num'].mean()
+        fecha_ultimo_pedido = grupo['fecha'].max() if 'fecha' in grupo.columns else None
+        return {
+            'lat': lat,
+            'lon': lon,
+            'address': direccion,
+            'user': grupo['usuario'].iloc[0] if 'usuario' in grupo.columns else 'Sin usuario',
+            'phone': grupo['telefonou'].iloc[0] if 'telefonou' in grupo.columns else 'Sin teléfono',
+            'total_spent': int(grupo['precio_num'].sum()),
+            'ticket_promedio': 0 if pd.isna(ticket_promedio) else float(ticket_promedio),
+            'fecha_ultimo_pedido': 'N/A' if fecha_ultimo_pedido is None or pd.isna(fecha_ultimo_pedido) else str(fecha_ultimo_pedido)
         }
-    }
+
+    heatmap_data = []
+    direcciones_sin_coord = []
+
+    # Una sola agregación por dirección (antes había dos ramas separadas e
+    # incompatibles: una agrupaba por dirección, la otra generaba un punto
+    # por cada pedido individual sin agrupar).
+    for direccion, grupo in df_pedidos.groupby('dire_norm'):
+        lat = lon = None
+        if lat_col and lon_col:
+            con_coord = grupo[grupo[lat_col].notna() & grupo[lon_col].notna()]
+            if not con_coord.empty:
+                lat = float(con_coord[lat_col].iloc[0])
+                lon = float(con_coord[lon_col].iloc[0])
+
+        if lat is None or lon is None:
+            direcciones_sin_coord.append(direccion)
+            continue
+
+        heatmap_data.append(construir_punto(direccion, grupo, lat, lon))
+
+    logger.info(f"Puntos con coordenadas guardadas: {len(heatmap_data)}")
+
+    # Direcciones sin coordenadas guardadas: se usan las que YA estén en el
+    # caché de geocoding (instantáneo, sin red). Las que nunca se vieron antes
+    # se resuelven con Nominatim (real, no inventado) en una tarea de
+    # background que corre DESPUÉS de responder — así el mapa nunca se queda
+    # esperando una geocodificación en vivo. Quedan disponibles solas en la
+    # próxima actualización (cada 10 min, o al refrescar la página).
+    direcciones_nuevas = []
+    if direcciones_sin_coord:
+        agregadas = 0
+        for direccion in direcciones_sin_coord:
+            coords = geocoding_service.geocodificar_desde_cache(direccion)
+            if coords:
+                grupo = df_pedidos[df_pedidos['dire_norm'] == direccion]
+                heatmap_data.append(construir_punto(direccion, grupo, coords['lat'], coords['lon']))
+                agregadas += 1
+            elif not geocoding_service.esta_en_cache(direccion):
+                direcciones_nuevas.append(direccion)
+        logger.info(f"Puntos desde caché de geocoding: {agregadas}. Direcciones nuevas por geocodificar en background: {len(direcciones_nuevas)}")
+
+    if direcciones_nuevas:
+        background_tasks.add_task(geocoding_service.geocodificar_lote, direcciones_nuevas, 25)
+
+    return heatmap_data
 
 @app.get("/ventas-totales-historicas", response_model=Dict)
 def get_ventas_totales_historicas():
     """Obtener ventas totales históricas acumuladas"""
     try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
+        pedidos = data_adapter.obtener_pedidos_combinados()
     except Exception as e:
         print("Error al obtener pedidos para ventas totales históricas:", e)
         return {"ventas_totales": 0, "total_pedidos": 0}
@@ -1029,126 +1209,99 @@ def get_ventas_historicas():
         # Convertir fechas
         df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
         df = df.dropna(subset=['fecha_parsed'])
-        
+
         # Convertir precios
         df['precio'] = pd.to_numeric(df['precio'], errors='coerce').fillna(0)
-        
-        # Agrupar por mes y año
+
+        # Agrupar por mes-año
         df['mes_anio'] = df['fecha_parsed'].dt.to_period('M')
-        ventas_por_mes = df.groupby('mes_anio')['precio'].sum().reset_index()
-        
-        # Convertir a formato requerido por el gráfico
+
+        # Contar días únicos con pedidos por mes
+        dias_por_mes = df.groupby('mes_anio')['fecha_parsed'].apply(
+            lambda x: x.dt.date.nunique()
+        )
+        ventas_por_mes = df.groupby('mes_anio')['precio'].sum()
+
+        hoy = datetime.now()
+        mes_actual = pd.Period(hoy, freq='M')
+
+        nombres_es = {
+            'Jan': 'Ene', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Abr',
+            'May': 'May', 'Jun': 'Jun', 'Jul': 'Jul', 'Aug': 'Ago',
+            'Sep': 'Sep', 'Oct': 'Oct', 'Nov': 'Nov', 'Dec': 'Dic'
+        }
+
+        # Filtrar meses con datos suficientes (excluir meses de inicio incompletos)
+        meses_validos = [
+            m for m in sorted(ventas_por_mes.index)
+            if dias_por_mes.get(m, 0) >= 10 or m == mes_actual
+        ]
+
+        # Regresión lineal sobre meses completos para calcular tendencia
+        meses_completos = [m for m in meses_validos if m != mes_actual]
+        ventas_completos = [int(ventas_por_mes[m]) for m in meses_completos]
+        n = len(ventas_completos)
+
+        if n >= 2:
+            xs = list(range(n))
+            mean_x = sum(xs) / n
+            mean_v = sum(ventas_completos) / n
+            num = sum((x - mean_x) * (v - mean_v) for x, v in zip(xs, ventas_completos))
+            den = sum((x - mean_x) ** 2 for x in xs)
+            slope = num / den if den else 0
+            intercept = mean_v - slope * mean_x
+        else:
+            slope, intercept = 0, ventas_completos[0] if ventas_completos else 0
+
+        # Construir resultado con tendencia para meses históricos
         resultado = []
-        for _, row in ventas_por_mes.iterrows():
-            mes_anio = row['mes_anio']
-            nombre_mes = mes_anio.strftime('%b')  # Abr, May, Jun, etc.
+        for i, mes_anio in enumerate(meses_validos):
+            ventas = int(ventas_por_mes[mes_anio])
+            nombre_mes = nombres_es.get(mes_anio.strftime('%b'), mes_anio.strftime('%b'))
+            nombre = f"{nombre_mes} {mes_anio.strftime('%y')}"
+            tendencia = int(intercept + slope * i)
+
+            if mes_anio == mes_actual:
+                dia_hoy = hoy.day
+                try:
+                    dias_en_mes = (datetime(hoy.year, hoy.month % 12 + 1, 1) - timedelta(days=1)).day if hoy.month < 12 else 31
+                except:
+                    dias_en_mes = 30
+                ventas_proyectadas = int(ventas * dias_en_mes / dia_hoy) if dia_hoy > 0 else ventas
+                resultado.append({
+                    'name': nombre,
+                    'ventas': ventas,
+                    'ventas_proyectadas': ventas_proyectadas,
+                    'tendencia': tendencia,
+                    'es_proyeccion': True
+                })
+            else:
+                resultado.append({
+                    'name': nombre,
+                    'ventas': ventas,
+                    'tendencia': tendencia,
+                    'es_proyeccion': False
+                })
+
+        # Agregar 2 meses futuros solo con tendencia (sin barras de ventas reales)
+        for extra in range(1, 3):
+            mes_futuro = mes_actual + extra
+            nombre_mes = nombres_es.get(mes_futuro.strftime('%b'), mes_futuro.strftime('%b'))
+            nombre = f"{nombre_mes} {mes_futuro.strftime('%y')}"
+            tendencia_futura = int(intercept + slope * (len(meses_validos) - 1 + extra))
             resultado.append({
-                'name': nombre_mes,
-                'ventas': int(row['precio'])
+                'name': nombre,
+                'ventas': None,
+                'tendencia': tendencia_futura,
+                'es_proyeccion': True,
+                'es_futuro': True
             })
-        
+
         return resultado
-        
+
     except Exception as e:
         print(f"Error procesando ventas históricas: {e}")
         return []
-
-@app.get("/predictor-inteligente", response_model=Dict)
-def get_predictor_inteligente(fecha: str = Query(..., description="Fecha objetivo (YYYY-MM-DD)"), 
-                             tipo_cliente: str = Query("residencial", description="Tipo de cliente")):
-    """Predicción inteligente fusionada con análisis VIP y variables exógenas"""
-    try:
-        # Obtener datos de pedidos
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-        
-        # Obtener datos de clientes
-        response_clientes = requests.get("https://fluvi.cl/fluviDos/GoApp/endpoints/clientes.php", headers=HEADERS, timeout=10)
-        response_clientes.raise_for_status()
-        clientes = response_clientes.json()
-        
-    except Exception as e:
-        print("Error al obtener datos:", e)
-        raise HTTPException(status_code=502, detail=f"Error obteniendo datos: {e}")
-    
-    df_pedidos = pd.DataFrame(pedidos)
-    df_clientes = pd.DataFrame(clientes)
-    
-    if 'nombrelocal' in df_pedidos.columns:
-        df_pedidos = df_pedidos[df_pedidos['nombrelocal'] == 'Aguas Ancud']
-    
-    if df_pedidos.empty or 'fecha' not in df_pedidos.columns:
-        raise HTTPException(status_code=400, detail="No hay datos suficientes para predicción")
-    
-    # Convertir fechas
-    df_pedidos['fecha_parsed'] = df_pedidos['fecha'].apply(parse_fecha)
-    df_pedidos = df_pedidos.dropna(subset=['fecha_parsed'])
-    
-    # Calcular factores dinámicos mejorados (versión simplificada)
-    factores_dinamicos = calcular_factores_dinamicos_avanzados(df_pedidos, df_clientes)
-    
-    # Analizar clientes VIP (simplificado)
-    analisis_vip = {
-        'total_vip': 0,
-        'probabilidad_alta': 0,
-        'probabilidad_media': 0,
-        'probabilidad_baja': 0,
-        'clientes_destacados': [],
-        'factor_vip': 1.25
-    }
-    
-    # Procesar variables exógenas (simplificado)
-    fecha_dt = datetime.strptime(fecha, "%Y-%m-%d")
-    variables_procesadas = {
-        'es_feriado': fecha_dt.weekday() in [5, 6],
-        'es_finde': fecha_dt.weekday() in [5, 6],
-        'factor_estacional': 1.2 if fecha_dt.month in [12, 1, 2] else 0.9 if fecha_dt.month in [6, 7, 8] else 1.0,
-        'mes': fecha_dt.month,
-        'dia_semana': fecha_dt.weekday(),
-        'variables_personalizadas': {}
-    }
-    
-    # Generar predicción usando el predictor simple mejorado
-    prediccion = predecir_inteligente_avanzado(fecha, tipo_cliente, factores_dinamicos, analisis_vip, variables_procesadas)
-    
-    if not prediccion:
-        raise HTTPException(status_code=400, detail='Error generando predicción')
-    
-    return prediccion
-
-@app.get("/validacion-predictor", response_model=Dict)
-def get_validacion_predictor(dias_test: int = Query(7, description="Días para validación")):
-    """Obtiene la validación cruzada del predictor con datos reales"""
-    try:
-        # Obtener datos de pedidos
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-        
-    except Exception as e:
-        print("Error al obtener datos para validación:", e)
-        raise HTTPException(status_code=502, detail=f"Error obteniendo datos: {e}")
-    
-    df_pedidos = pd.DataFrame(pedidos)
-    
-    if 'nombrelocal' in df_pedidos.columns:
-        df_pedidos = df_pedidos[df_pedidos['nombrelocal'] == 'Aguas Ancud']
-    
-    if df_pedidos.empty or 'fecha' not in df_pedidos.columns:
-        raise HTTPException(status_code=400, detail="No hay datos suficientes para validación")
-    
-    # Convertir fechas
-    df_pedidos['fecha_parsed'] = df_pedidos['fecha'].apply(parse_fecha)
-    df_pedidos = df_pedidos.dropna(subset=['fecha_parsed'])
-    
-    # Realizar validación cruzada
-    resultado_validacion = validacion_cruzada_predictor(df_pedidos, dias_test)
-    
-    if 'error' in resultado_validacion:
-        raise HTTPException(status_code=400, detail=resultado_validacion['error'])
-    
-    return resultado_validacion
 
 def detectar_anomalias(pedidos_por_fecha, umbral_desviacion=2):
     """Detecta días anómalos usando desviación estándar"""
@@ -1276,60 +1429,6 @@ def predecir_inteligente(fecha_objetivo, tipo_cliente="residencial", factores_di
 
 
 
-def calcular_factores_dinamicos_avanzados(df_pedidos, df_clientes, dias_atras=60):
-    """Calcula factores dinámicos avanzados con 60 días de datos históricos"""
-    try:
-        # Filtrar últimos 60 días de datos
-        fecha_limite = datetime.now() - timedelta(days=dias_atras)
-        df_filtrado = df_pedidos[df_pedidos['fecha_parsed'] >= fecha_limite].copy()
-        
-        if df_filtrado.empty:
-            return {
-                'estadisticas': {'media': 8, 'mediana': 8, 'desviacion': 2},
-                'anomalias': [],
-                'factores_tipo': {'residencial': 1.0, 'recurrente': 1.2, 'nuevo': 0.8, 'empresa': 1.1, 'vip': 1.25},
-                'tendencia': {'tendencia': 'estable', 'factor': 1.0, 'pendiente': 0}
-            }
-        
-        # Estadísticas mejoradas con más datos
-        pedidos_por_dia = df_filtrado.groupby(df_filtrado['fecha_parsed'].dt.date).size()
-        
-        estadisticas = {
-            'media': pedidos_por_dia.mean(),
-            'mediana': pedidos_por_dia.median(),
-            'desviacion': pedidos_por_dia.std(),
-            'total_dias': len(pedidos_por_dia),
-            'rango_min': pedidos_por_dia.min(),
-            'rango_max': pedidos_por_dia.max()
-        }
-        
-        # Detección de anomalías mejorada con más datos
-        anomalias, _, _ = detectar_anomalias_avanzadas(pedidos_por_dia)
-        
-        # Factores por tipo de cliente con más datos
-        factores_tipo = calcular_factores_tipo_avanzados(df_filtrado, df_clientes)
-        
-        # Tendencia con más datos históricos
-        tendencia = calcular_tendencia_avanzada(pedidos_por_dia)
-        
-        return {
-            'estadisticas': estadisticas,
-            'anomalias': list(anomalias.index) if not anomalias.empty else [],
-            'factores_tipo': factores_tipo,
-            'tendencia': tendencia,
-            'datos_utilizados': len(df_filtrado),
-            'periodo_analisis': f"{dias_atras} días"
-        }
-        
-    except Exception as e:
-        print(f"Error calculando factores dinámicos avanzados: {e}")
-        return {
-            'estadisticas': {'media': 8, 'mediana': 8, 'desviacion': 2},
-            'anomalias': [],
-            'factores_tipo': {'residencial': 1.0, 'recurrente': 1.2, 'nuevo': 0.8, 'empresa': 1.1, 'vip': 1.25},
-            'tendencia': {'tendencia': 'estable', 'factor': 1.0, 'pendiente': 0}
-        }
-
 def detectar_anomalias_avanzadas(pedidos_por_fecha, umbral_desviacion=2.5):
     """Detección de anomalías mejorada con múltiples métodos"""
     media = pedidos_por_fecha.mean()
@@ -1373,49 +1472,6 @@ def calcular_factores_tipo_avanzados(df_pedidos, df_clientes):
     
     return factores_base
 
-def analizar_clientes_vip(df_clientes, fecha_objetivo, factores_dinamicos):
-    """Analiza la probabilidad de pedidos de clientes VIP"""
-    try:
-        # Filtrar clientes VIP (ejemplo: basado en volumen de compras)
-        clientes_vip = []
-        
-        if not df_clientes.empty and 'usuario' in df_clientes.columns:
-            # Identificar VIP basado en criterios reales de frecuencia y monto
-            for _, cliente in df_clientes.iterrows():
-                # Criterios para VIP (ejemplo)
-                if 'vip' in str(cliente.get('usuario', '')).lower() or \
-                   'recurrente' in str(cliente.get('tipo', '')).lower():
-                    clientes_vip.append({
-                        'usuario': cliente.get('usuario', ''),
-                        'direccion': cliente.get('dire', ''),
-                        'telefono': cliente.get('telefonou', ''),
-                        'ultimo_pedido': cliente.get('fecha', ''),
-                        'probabilidad_pedido': calcular_probabilidad_vip(cliente, fecha_objetivo)
-                    })
-        
-        # Ordenar por probabilidad
-        clientes_vip.sort(key=lambda x: x['probabilidad_pedido'], reverse=True)
-        
-        return {
-            'total_vip': len(clientes_vip),
-            'probabilidad_alta': len([c for c in clientes_vip if c['probabilidad_pedido'] > 0.7]),
-            'probabilidad_media': len([c for c in clientes_vip if 0.4 <= c['probabilidad_pedido'] <= 0.7]),
-            'probabilidad_baja': len([c for c in clientes_vip if c['probabilidad_pedido'] < 0.4]),
-            'clientes_destacados': clientes_vip[:5],  # Top 5 más probables
-            'factor_vip': 1.25 if clientes_vip else 1.0
-        }
-        
-    except Exception as e:
-        print(f"Error analizando clientes VIP: {e}")
-        return {
-            'total_vip': 0,
-            'probabilidad_alta': 0,
-            'probabilidad_media': 0,
-            'probabilidad_baja': 0,
-            'clientes_destacados': [],
-            'factor_vip': 1.0
-        }
-
 def calcular_probabilidad_vip(cliente, fecha_objetivo):
     """Calcula la probabilidad de que un cliente VIP haga un pedido"""
     try:
@@ -1449,41 +1505,6 @@ def calcular_probabilidad_vip(cliente, fecha_objetivo):
         print(f"Error calculando probabilidad VIP: {e}")
         return 0.3
 
-def procesar_variables_exogenas(variables_json, fecha_objetivo):
-    """Procesa variables exógenas como clima, feriados, etc."""
-    variables = {}
-    
-    try:
-        if variables_json:
-            variables = json.loads(variables_json)
-    except:
-        pass
-    
-    # Variables por defecto
-    fecha_dt = datetime.strptime(fecha_objetivo, "%Y-%m-%d")
-    
-    # Detectar feriados (ejemplo simplificado)
-    es_feriado = fecha_dt.weekday() in [5, 6]  # Sábado o domingo
-    es_finde = fecha_dt.weekday() in [5, 6]
-    
-    # Factor estacional (ejemplo)
-    mes = fecha_dt.month
-    if mes in [12, 1, 2]:  # Verano
-        factor_estacional = 1.2
-    elif mes in [6, 7, 8]:  # Invierno
-        factor_estacional = 0.9
-    else:
-        factor_estacional = 1.0
-    
-    return {
-        'es_feriado': es_feriado,
-        'es_finde': es_finde,
-        'factor_estacional': factor_estacional,
-        'mes': mes,
-        'dia_semana': fecha_dt.weekday(),
-        'variables_personalizadas': variables
-    }
-
 def calcular_tendencia_avanzada(pedidos_filtrados):
     """Calcula tendencia avanzada de los datos"""
     if len(pedidos_filtrados) < 7:
@@ -1513,93 +1534,6 @@ def calcular_tendencia_avanzada(pedidos_filtrados):
         }
     except:
         return {'tendencia': 'estable', 'factor': 1.0}
-
-def predecir_inteligente_avanzado(fecha_objetivo, tipo_cliente, factores_dinamicos, analisis_vip, variables_exogenas):
-    """Predicción inteligente avanzada con múltiples factores"""
-    if not factores_dinamicos:
-        return None
-    
-    fecha = datetime.strptime(fecha_objetivo, "%Y-%m-%d")
-    dia_semana = fecha.weekday()
-    
-    # Obtener mediana base
-    base_prediccion = factores_dinamicos['estadisticas']['mediana']
-    
-    # Aplicar factor de tipo de cliente
-    factores_tipo = factores_dinamicos['factores_tipo']
-    factor_tipo = factores_tipo.get(tipo_cliente, 1.0)
-    
-    # Factor VIP
-    factor_vip = analisis_vip.get('factor_vip', 1.0)
-    
-    # Factor de tendencia
-    factor_tendencia = factores_dinamicos['tendencia']['factor']
-    
-    # Factor estacional
-    factor_estacional = variables_exogenas.get('factor_estacional', 1.0)
-    
-    # Factor fin de semana
-    factor_finde = 0.8 if variables_exogenas.get('es_finde', False) else 1.0
-    
-    # Cálculo de predicción mejorado
-    prediccion_base = base_prediccion * factor_tipo * factor_vip * factor_tendencia * factor_estacional * factor_finde
-    prediccion_final = round(prediccion_base)
-    prediccion_final = max(1, prediccion_final)
-    
-    # Calcular intervalo de confianza mejorado
-    estadisticas = factores_dinamicos['estadisticas']
-    desviacion = estadisticas['desviacion']
-    rango_inferior = max(1, round(prediccion_final - desviacion))
-    rango_superior = round(prediccion_final + desviacion)
-    
-    # Calcular nivel de confianza mejorado
-    estadisticas = factores_dinamicos['estadisticas']
-    variabilidad = estadisticas['desviacion'] / estadisticas['media'] if estadisticas['media'] > 0 else 0
-    
-    # Ajustar confianza basado en factores
-    confianza_base = 75
-    if variabilidad < 0.3:
-        confianza_base += 10
-    elif variabilidad > 0.5:
-        confianza_base -= 15
-    
-    # Ajustar por análisis VIP
-    if analisis_vip.get('total_vip', 0) > 0:
-        confianza_base += 5
-    
-    # Ajustar por variables exógenas
-    if variables_exogenas.get('es_feriado', False):
-        confianza_base -= 10
-    
-    nivel_confianza = max(50, min(95, confianza_base))
-    
-    # Calcular efectividad estimada
-    efectividad_estimada = calcular_efectividad_estimada(
-        variabilidad, analisis_vip, variables_exogenas
-    )
-    
-    # Generar recomendaciones
-    recomendaciones = generar_recomendaciones_avanzadas(
-        prediccion_final, analisis_vip, variables_exogenas
-    )
-    
-    return {
-        'prediccion': prediccion_final,
-        'rango_confianza': [rango_inferior, rango_superior],
-        'nivel_confianza': nivel_confianza,
-        'es_anomalia': len(factores_dinamicos.get('anomalias', [])) > 0,
-        'factores': {
-            'base': base_prediccion,
-            'factor_tipo': factor_tipo,
-            'factor_vip': factor_vip,
-            'factor_tendencia': factor_tendencia,
-            'factor_estacional': factor_estacional,
-            'factor_finde': factor_finde,
-            'dia_semana': dia_semana
-        },
-        'efectividad_estimada': efectividad_estimada,
-        'recomendaciones': recomendaciones
-    }
 
 def calcular_efectividad_estimada(variabilidad, analisis_vip, variables_exogenas):
     """Calcula la efectividad estimada de la predicción"""
@@ -1647,168 +1581,6 @@ def generar_recomendaciones_avanzadas(prediccion, analisis_vip, variables_exogen
         recomendaciones.append("Operación estándar recomendada")
     
     return recomendaciones
-
-def validacion_cruzada_predictor(df_pedidos: pd.DataFrame, dias_test: int = 7) -> Dict:
-    """Realiza validación cruzada del predictor con datos reales"""
-    try:
-        # Obtener datos de los últimos 30 días para validación
-        fecha_limite = datetime.now() - timedelta(days=30)
-        df_validacion = df_pedidos[df_pedidos['fecha_parsed'] >= fecha_limite].copy()
-        
-        if df_validacion.empty:
-            return {'error': 'No hay datos suficientes para validación'}
-        
-        # Separar datos en train y test
-        fechas_unicas = sorted(df_validacion['fecha_parsed'].dt.date.unique())
-        
-        if len(fechas_unicas) < dias_test + 1:
-            return {'error': f'Se necesitan al menos {dias_test + 1} días para validación'}
-        
-        # Usar los últimos días como test
-        fechas_test = fechas_unicas[-dias_test:]
-        fechas_train = fechas_unicas[:-dias_test]
-        
-        # Datos de entrenamiento
-        df_train = df_validacion[df_validacion['fecha_parsed'].dt.date.isin(fechas_train)]
-        df_test = df_validacion[df_validacion['fecha_parsed'].dt.date.isin(fechas_test)]
-        
-        # Calcular predicciones para cada día de test
-        errores = []
-        predicciones_vs_reales = []
-        
-        for fecha_test in fechas_test:
-            # Obtener pedidos reales del día
-            pedidos_reales = len(df_test[df_test['fecha_parsed'].dt.date == fecha_test])
-            
-            # Generar predicción usando solo datos de entrenamiento
-            fecha_str = fecha_test.strftime('%Y-%m-%d')
-            
-            # Predicción basada en datos de entrenamiento reales
-            pedidos_train_por_dia = df_train.groupby(df_train['fecha_parsed'].dt.date).size()
-            prediccion_basica = pedidos_train_por_dia.median()
-            
-            # Ajustar por día de la semana
-            dia_semana = fecha_test.weekday()
-            pedidos_dia_semana = df_train[df_train['fecha_parsed'].dt.dayofweek == dia_semana]
-            if not pedidos_dia_semana.empty:
-                pedidos_por_dia_semana = pedidos_dia_semana.groupby(pedidos_dia_semana['fecha_parsed'].dt.date).size()
-                factor_dia = pedidos_por_dia_semana.median() / pedidos_train_por_dia.median()
-                prediccion_ajustada = prediccion_basica * factor_dia
-            else:
-                prediccion_ajustada = prediccion_basica
-            
-            # Calcular error
-            if pedidos_reales > 0:
-                error_porcentual = abs(prediccion_ajustada - pedidos_reales) / pedidos_reales * 100
-                errores.append(error_porcentual)
-                
-                predicciones_vs_reales.append({
-                    'fecha': fecha_str,
-                    'prediccion': round(prediccion_ajustada, 1),
-                    'real': pedidos_reales,
-                    'error_porcentual': round(error_porcentual, 1)
-                })
-        
-        if not errores:
-            return {'error': 'No se pudieron calcular errores'}
-        
-        # Calcular métricas de efectividad
-        error_promedio = np.mean(errores)
-        error_mediano = np.median(errores)
-        
-        # Clasificar predicciones
-        predicciones_excelentes = sum(1 for e in errores if e <= 15)
-        predicciones_buenas = sum(1 for e in errores if 15 < e <= 30)
-        predicciones_aceptables = sum(1 for e in errores if 30 < e <= 50)
-        predicciones_pobres = sum(1 for e in errores if e > 50)
-        
-        total_predicciones = len(errores)
-        
-        efectividad = {
-            'error_promedio': round(error_promedio, 1),
-            'error_mediano': round(error_mediano, 1),
-            'total_predicciones': total_predicciones,
-            'predicciones_excelentes': predicciones_excelentes,
-            'predicciones_buenas': predicciones_buenas,
-            'predicciones_aceptables': predicciones_aceptables,
-            'predicciones_pobres': predicciones_pobres,
-            'porcentaje_excelentes': round(predicciones_excelentes / total_predicciones * 100, 1),
-            'porcentaje_buenas': round(predicciones_buenas / total_predicciones * 100, 1),
-            'porcentaje_aceptables': round(predicciones_aceptables / total_predicciones * 100, 1),
-            'porcentaje_pobres': round(predicciones_pobres / total_predicciones * 100, 1),
-            'efectividad_general': round((predicciones_excelentes + predicciones_buenas) / total_predicciones * 100, 1),
-            'detalles': predicciones_vs_reales,
-            'periodo_validacion': f"{len(fechas_train)} días train, {len(fechas_test)} días test"
-        }
-        
-        print(f"✅ Validación cruzada completada - Efectividad: {efectividad['efectividad_general']}%")
-        return efectividad
-        
-    except Exception as e:
-        print(f"❌ Error en validación cruzada: {e}")
-        return {'error': f'Error en validación: {str(e)}'}
-
-@app.get("/tracking/metricas", response_model=Dict)
-def get_tracking_metricas():
-    """Obtiene métricas de efectividad del predictor"""
-    return {
-        "efectividad_general": 85.5,
-        "total_predicciones": 30,
-        "predicciones_excelentes": 18,
-        "predicciones_buenas": 8,
-        "predicciones_aceptables": 3,
-        "predicciones_pobres": 1,
-        "error_promedio": 12.3,
-        "ultima_actualizacion": datetime.now().isoformat()
-    }
-
-@app.get("/tracking/reporte", response_model=Dict)
-def get_tracking_reporte():
-    """Obtiene reporte diario completo de tracking"""
-    return {
-        "fecha": datetime.now().strftime("%Y-%m-%d"),
-        "resumen": {
-            "predicciones_hoy": 5,
-            "predicciones_semana": 35,
-            "efectividad_promedio": 85.5
-        },
-        "metricas": {
-            "error_promedio": 12.3,
-            "predicciones_excelentes": 18,
-            "predicciones_buenas": 8
-        },
-        "recomendaciones": [
-            "El predictor está funcionando bien",
-            "Considerar ajustes menores para mejorar precisión"
-        ]
-    }
-
-@app.post("/tracking/registrar-pedidos-reales")
-def registrar_pedidos_reales(fecha: str = Query(..., description="Fecha (YYYY-MM-DD)"), 
-                           pedidos_reales: int = Query(..., description="Número de pedidos reales"),
-                           tipo_cliente: str = Query("general", description="Tipo de cliente")):
-    """Registra pedidos reales para comparar con predicciones"""
-    return {"mensaje": f"Pedidos reales registrados: {pedidos_reales} para {fecha}"}
-
-@app.get("/tracking/ultimas-predicciones", response_model=List[Dict])
-def get_ultimas_predicciones(dias: int = Query(7, description="Número de días a mostrar")):
-    """Obtiene las últimas predicciones registradas"""
-    return [
-        {
-            "fecha": "2024-08-05",
-            "prediccion": 12,
-            "real": 11,
-            "error_porcentual": 9.1,
-            "tipo_cliente": "residencial"
-        },
-        {
-            "fecha": "2024-08-04",
-            "prediccion": 8,
-            "real": 9,
-            "error_porcentual": 11.1,
-            "tipo_cliente": "residencial"
-        }
-    ]
 
 @app.get("/ventas-diarias", response_model=Dict)
 def get_ventas_diarias():
@@ -1890,17 +1662,8 @@ def get_ventas_diarias():
         
         # Obtener fecha máxima y calcular métricas
         try:
-            fecha_maxima = df['fecha_parsed'].max()
-            if pd.isna(fecha_maxima) or fecha_maxima is None:
-                logger.warning("No hay fecha máxima válida, retornando valores por defecto")
-                return respuesta_error
-            
-            # Asegurar que fecha_maxima sea un objeto datetime válido
-            if not isinstance(fecha_maxima, pd.Timestamp):
-                logger.warning(f"Fecha máxima no es un Timestamp válido: {type(fecha_maxima)}, retornando valores por defecto")
-                return respuesta_error
-            
-            hoy = fecha_maxima.date()
+            # Usar la fecha real de hoy para las métricas "diarias"
+            hoy = datetime.now().date()
             
             # Ventas de hoy
             try:
@@ -1927,12 +1690,13 @@ def get_ventas_diarias():
                 porcentaje_cambio = ((ventas_hoy - ventas_mismo_dia_mes_anterior) / ventas_mismo_dia_mes_anterior) * 100
             
             # Tendencia de 7 días
+            dias_semana_es = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
             tendencia_7_dias = []
             try:
                 for i in range(7):
                     fecha_tendencia = hoy - timedelta(days=6-i)
                     ventas_dia = df[df['fecha_parsed'].dt.date == fecha_tendencia]['precio'].sum()
-                    dia_semana = fecha_tendencia.strftime('%a')
+                    dia_semana = dias_semana_es[fecha_tendencia.weekday()]
                     tendencia_7_dias.append({
                         "fecha": fecha_tendencia.strftime('%d-%m'),
                         "ventas": int(ventas_dia),
@@ -2035,14 +1799,14 @@ def get_ventas_semanales():
         
         ventas_semana_pasada = pedidos_semana_pasada['precio'].sum()
         pedidos_semana_pasada_count = len(pedidos_semana_pasada)
-        
+
         # Calcular porcentaje de cambio
         if ventas_semana_pasada > 0:
             porcentaje_cambio = ((ventas_semana_actual - ventas_semana_pasada) / ventas_semana_pasada) * 100
-            es_positivo = ventas_semana_actual >= ventas_semana_pasada
+            es_positivo = bool(ventas_semana_actual >= ventas_semana_pasada)
         else:
             porcentaje_cambio = 100 if ventas_semana_actual > 0 else 0
-            es_positivo = ventas_semana_actual > 0
+            es_positivo = bool(ventas_semana_actual > 0)
         
         resultado = {
             "ventas_semana_actual": int(ventas_semana_actual),
@@ -2076,13 +1840,20 @@ def get_ventas_semanales():
 
 @app.get("/pedidos-por-horario", response_model=Dict)
 def get_pedidos_por_horario():
-    """Calcular pedidos por horario reales"""
+    """Calcular pedidos por horario reales, acotado al mes actual.
+
+    Antes se calculaba sobre TODO el histórico de pedidos, lo que hacía que
+    el resultado se sintiera "congelado": con años de datos acumulados, un
+    día de pedidos nuevos no mueve el porcentaje de forma perceptible.
+    Acotarlo al mes en curso lo alinea con el resto de los KPIs (ventas_mes,
+    clientes_activos, etc.) y hace que refleje la actividad reciente real.
+    """
     try:
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        if not pedidos:
+            raise Exception("Sin datos")
     except Exception as e:
-        print("Error al obtener pedidos para horarios:", e)
+        logger.error(f"Error al obtener pedidos para horarios: {e}")
         return {
             "pedidos_manana": 0,
             "pedidos_tarde": 0,
@@ -2090,14 +1861,23 @@ def get_pedidos_por_horario():
             "porcentaje_manana": 0,
             "porcentaje_tarde": 0
         }
-    
+
     try:
         df = pd.DataFrame(pedidos)
-        
+
         # Filtrar Aguas Ancud
         if 'nombrelocal' in df.columns:
             df = df[df['nombrelocal'] == 'Aguas Ancud']
-        
+
+        # Acotar al mes actual (misma convención que /kpis)
+        if 'fecha' in df.columns:
+            df['fecha_parsed'] = df['fecha'].apply(parse_fecha)
+            hoy = datetime.now()
+            df = df[
+                (df['fecha_parsed'].dt.month == hoy.month) &
+                (df['fecha_parsed'].dt.year == hoy.year)
+            ]
+
         if df.empty:
             return {
                 "pedidos_manana": 0,
@@ -2106,32 +1886,37 @@ def get_pedidos_por_horario():
                 "porcentaje_manana": 0,
                 "porcentaje_tarde": 0
             }
-        
+
         # Calcular bloques
         bloque_manana = 0
         bloque_tarde = 0
         
+        import re
         for _, pedido in df.iterrows():
             if pd.notna(pedido.get('hora')):
-                hora_str = str(pedido['hora'])
-                
-                # Formato: "02:53 pm" o "11:30 am"
-                import re
-                hora_match = re.match(r'(\d{1,2}):(\d{2})\s*(am|pm)', hora_str.lower())
-                
-                if hora_match:
-                    hora = int(hora_match.group(1))
-                    ampm = hora_match.group(3)
-                    
-                    # Convertir a formato 24 horas
-                    if ampm == 'pm' and hora != 12:
-                        hora += 12
-                    elif ampm == 'am' and hora == 12:
-                        hora = 0
-                    
-                    if hora >= 11 and hora < 13:
+                hora_str = str(pedido['hora']).strip()
+                hora = None
+
+                # Formato 24h: "14:30:00" o "14:30"
+                match_24h = re.match(r'^(\d{1,2}):\d{2}', hora_str)
+                if match_24h:
+                    hora = int(match_24h.group(1))
+
+                # Formato 12h: "02:53 pm" o "11:30 am"
+                if hora is None:
+                    match_12h = re.match(r'(\d{1,2}):(\d{2})\s*(am|pm)', hora_str.lower())
+                    if match_12h:
+                        hora = int(match_12h.group(1))
+                        ampm = match_12h.group(3)
+                        if ampm == 'pm' and hora != 12:
+                            hora += 12
+                        elif ampm == 'am' and hora == 12:
+                            hora = 0
+
+                if hora is not None:
+                    if 11 <= hora < 13:
                         bloque_manana += 1
-                    elif hora >= 15 and hora < 19:
+                    elif 15 <= hora < 19:
                         bloque_tarde += 1
         
         total = bloque_manana + bloque_tarde
@@ -2174,13 +1959,11 @@ def get_estado_inventario():
     """Obtener estado actual del inventario de bidones"""
     try:
         # Obtener pedidos recientes para calcular demanda
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-        
+        pedidos = data_adapter.obtener_pedidos_combinados()
+
         df = pd.DataFrame(pedidos)
         if 'nombrelocal' in df.columns:
-            df = df[df['nombrelocal'] == 'Aguas Ancud']
+            df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
         
         if df.empty:
             return {
@@ -2206,9 +1989,10 @@ def get_estado_inventario():
         else:
             demanda_diaria = 0
         
-        # Simular stock actual (en producción esto vendría de una base de datos)
-        # Por ahora, estimamos basado en pedidos recientes
-        stock_actual = max(0, 100 - len(df_reciente))  # Stock inicial 100, menos pedidos recientes
+        # El stock real requiere integración con bodega — estimamos basado en demanda reciente
+        # Asumimos reposición semanal: capacidad semanal estimada 200 bidones
+        bidones_vendidos_semana = len(df_reciente)
+        stock_actual = max(0, 200 - bidones_vendidos_semana)  # Reposición semanal estimada
         stock_minimo = 50
         stock_maximo = 200
         
@@ -2310,13 +2094,11 @@ def get_prediccion_inventario(dias: int = Query(7, description="Días a predecir
     """Predecir necesidades de inventario para los próximos días"""
     try:
         # Obtener datos históricos
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-        
+        pedidos = data_adapter.obtener_pedidos_combinados()
+
         df = pd.DataFrame(pedidos)
         if 'nombrelocal' in df.columns:
-            df = df[df['nombrelocal'] == 'Aguas Ancud']
+            df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
         
         if df.empty:
             return {"error": "No hay datos suficientes para predicción"}
@@ -2373,13 +2155,11 @@ def get_reporte_ejecutivo():
     """Generar reporte ejecutivo semanal automático"""
     try:
         # Obtener datos de pedidos
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-        
+        pedidos = data_adapter.obtener_pedidos_combinados()
+
         df = pd.DataFrame(pedidos)
         if 'nombrelocal' in df.columns:
-            df = df[df['nombrelocal'] == 'Aguas Ancud']
+            df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
         
         if df.empty:
             return {"error": "No hay datos suficientes para el reporte"}
@@ -2602,13 +2382,11 @@ def get_analisis_rentabilidad():
     """Análisis de rentabilidad avanzado con métricas detalladas basadas en datos reales de KPIs"""
     try:
         # Obtener datos de pedidos
-        response = requests.get(ENDPOINT_PEDIDOS, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        pedidos = response.json()
-        
+        pedidos = data_adapter.obtener_pedidos_combinados()
+
         df = pd.DataFrame(pedidos)
         if 'nombrelocal' in df.columns:
-            df = df[df['nombrelocal'] == 'Aguas Ancud']
+            df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
         
         if df.empty:
             return {"error": "No hay datos suficientes para el análisis"}
@@ -2662,14 +2440,14 @@ def get_analisis_rentabilidad():
         costos_fijos = cuota_camion  # Costo fijo del camión
         costos_totales = costos_fijos + costos_variables  # Costos fijos + variables
         
-        # Cálculo de IVA (MISMO MÉTODO QUE KPIs)
-        iva_ventas = ventas_mes * 0.19  # IVA de las ventas
-        iva_tapas = (costo_tapa * total_bidones_mes) * 0.19  # IVA de las tapas compradas
+        # Cálculo de IVA (precio $2.000 incluye IVA → extraer débito fiscal)
+        iva_ventas = (ventas_mes / 1.19) * 0.19  # Débito fiscal
+        iva_tapas = costo_tapa * total_bidones_mes * 0.19  # Crédito fiscal tapas
         iva = iva_ventas - iva_tapas  # IVA neto a pagar
-        
+
         # Cálculo de IVA del mes pasado
-        iva_ventas_mes_pasado = ventas_mes_pasado * 0.19
-        iva_tapas_mes_pasado = (costo_tapa * total_bidones_mes_pasado) * 0.19
+        iva_ventas_mes_pasado = (ventas_mes_pasado / 1.19) * 0.19
+        iva_tapas_mes_pasado = costo_tapa * total_bidones_mes_pasado * 0.19
         iva_mes_pasado = iva_ventas_mes_pasado - iva_tapas_mes_pasado
         
         # Cálculo de utilidad (MISMO MÉTODO QUE KPIs)
@@ -3123,30 +2901,20 @@ def get_ventas_locales():
         print(f"Pedidos combinados obtenidos: {len(pedidos)} registros")
         
         df = pd.DataFrame(pedidos)
-        
-        # Filtrar solo ventas del local (retirolocal = 'si')
+
+        # Filtrar solo pedidos de Aguas Ancud
+        if 'nombrelocal' in df.columns:
+            df = df[df['nombrelocal'].str.strip().str.lower() == 'aguas ancud']
+
+        # Ventas del local físico: pedidos marcados retirolocal='si' (en el sistema
+        # nuevo corresponde a deliveryType 'local' o 'retiro', distinto de 'domicilio').
+        # Antes este endpoint reutilizaba TODOS los pedidos (incluido delivery) como si
+        # fueran ventas del local — quedaba mezclado con /kpis y /pedidos.
         if 'retirolocal' in df.columns:
-            df_local = df[df['retirolocal'] == 'si']
-            logger.info(f"Ventas del local: {len(df_local)} registros")
+            df_local = df[df['retirolocal'].astype(str).str.strip().str.lower() == 'si'].copy()
         else:
-            logger.warning("No se encontró columna 'retirolocal'")
-            return {
-                "ventas_totales": 0,
-                "ventas_mes": 0,
-                "ventas_semana": 0,
-                "ventas_hoy": 0,
-                "bidones_totales": 0,
-                "bidones_mes": 0,
-                "bidones_semana": 0,
-                "bidones_hoy": 0,
-                "ticket_promedio": 0,
-                "metodos_pago": {},
-                "ventas_diarias": [],
-                "ventas_semanales": [],
-                "ventas_mensuales": [],
-                "total_transacciones": 0,
-                "clientes_unicos": 0
-            }
+            df_local = df.iloc[0:0].copy()
+        logger.info(f"Pedidos del local físico (retirolocal='si'): {len(df_local)} de {len(df)} pedidos totales")
         
         if df_local.empty:
             return {
@@ -3159,6 +2927,10 @@ def get_ventas_locales():
                 "bidones_semana": 0,
                 "bidones_hoy": 0,
                 "ticket_promedio": 0,
+                "ventas_mes_pasado": 0,
+                "bidones_mes_pasado": 0,
+                "ticket_promedio_mes_pasado": 0,
+                "total_transacciones_mes_pasado": 0,
                 "metodos_pago": {},
                 "ventas_diarias": [],
                 "ventas_semanales": [],
@@ -3166,7 +2938,7 @@ def get_ventas_locales():
                 "total_transacciones": 0,
                 "clientes_unicos": 0
             }
-        
+
         # Convertir fechas y precios
         df_local['fecha_parsed'] = df_local['fecha'].apply(parse_fecha)
         df_local = df_local.dropna(subset=['fecha_parsed'])
@@ -3177,25 +2949,35 @@ def get_ventas_locales():
         inicio_mes = hoy.replace(day=1)
         inicio_semana = hoy - timedelta(days=hoy.weekday())
         
+        inicio_mes_pasado = (inicio_mes - timedelta(days=1)).replace(day=1)
+        fin_mes_pasado = inicio_mes - timedelta(days=1)
+
         # Filtrar datos por períodos
         df_mes = df_local[df_local['fecha_parsed'].dt.date >= inicio_mes]
         df_semana = df_local[df_local['fecha_parsed'].dt.date >= inicio_semana]
         df_hoy = df_local[df_local['fecha_parsed'].dt.date == hoy]
-        
+        df_mes_pasado = df_local[
+            (df_local['fecha_parsed'].dt.date >= inicio_mes_pasado) &
+            (df_local['fecha_parsed'].dt.date <= fin_mes_pasado)
+        ]
+
         # Calcular métricas
         ventas_totales = df_local['precio'].sum()
         ventas_mes = df_mes['precio'].sum()
         ventas_semana = df_semana['precio'].sum()
         ventas_hoy = df_hoy['precio'].sum()
-        
+        ventas_mes_pasado = df_mes_pasado['precio'].sum()
+
         # Calcular bidones
         bidones_totales = df_local['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
         bidones_mes = df_mes['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
         bidones_semana = df_semana['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
         bidones_hoy = df_hoy['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum()
-        
+        bidones_mes_pasado = df_mes_pasado['ordenpedido'].astype(str).str.replace(r'[^\d]', '', regex=True).astype(int).sum() if len(df_mes_pasado) > 0 else 0
+
         # Ticket promedio
         ticket_promedio = df_local['precio'].mean() if len(df_local) > 0 else 0
+        ticket_promedio_mes_pasado = df_mes_pasado['precio'].mean() if len(df_mes_pasado) > 0 else 0
         
         # Métodos de pago
         metodos_pago = df_local['metodopago'].value_counts().to_dict()
@@ -3261,6 +3043,10 @@ def get_ventas_locales():
             "bidones_semana": int(bidones_semana),
             "bidones_hoy": int(bidones_hoy),
             "ticket_promedio": int(ticket_promedio),
+            "ventas_mes_pasado": int(ventas_mes_pasado),
+            "bidones_mes_pasado": int(bidones_mes_pasado),
+            "ticket_promedio_mes_pasado": int(ticket_promedio_mes_pasado),
+            "total_transacciones_mes_pasado": len(df_mes_pasado),
             "metodos_pago": metodos_pago,
             "ventas_diarias": ventas_diarias,
             "ventas_semanales": ventas_semanales,
@@ -3281,6 +3067,10 @@ def get_ventas_locales():
             "bidones_semana": 0,
             "bidones_hoy": 0,
             "ticket_promedio": 0,
+            "ventas_mes_pasado": 0,
+            "bidones_mes_pasado": 0,
+            "ticket_promedio_mes_pasado": 0,
+            "total_transacciones_mes_pasado": 0,
             "metodos_pago": {},
             "ventas_diarias": [],
             "ventas_semanales": [],
@@ -3339,6 +3129,96 @@ def get_ventas_locales_test():
         "total_transacciones": 26,
         "clientes_unicos": 15
     }
+
+@app.get("/predictor/demanda", response_model=Dict)
+def get_predictor_demanda():
+    """Pronóstico de demanda: próximos 7 días con rango P10-P90 y
+    proyección de fin de mes, más la precisión histórica real del modelo."""
+    try:
+        pedidos = data_adapter.obtener_pedidos_combinados()
+    except Exception as e:
+        logger.error(f"Error al obtener pedidos para predictor de demanda: {e}", exc_info=True)
+        return {"dias_7": [], "manana": None, "proyeccion_mes": None, "precision_historica_pct": None}
+
+    df = pd.DataFrame(pedidos)
+    if 'nombrelocal' in df.columns:
+        df = df[df['nombrelocal'].astype(str).str.strip().str.lower() == 'aguas ancud']
+    pedidos_filtrados = df.to_dict('records')
+
+    dias_7 = demand_forecast_service.predecir_proximos_dias(pedidos_filtrados, dias=7)
+    validacion = demand_forecast_service.validar_precision(pedidos_filtrados, dias_test=30)
+
+    if not dias_7:
+        return {
+            "dias_7": [], "manana": None, "proyeccion_mes": None,
+            "precision_historica_pct": validacion['mape_pct'],
+            "dias_evaluados": validacion['dias_evaluados'],
+        }
+
+    manana = dias_7[0]
+
+    # Proyección de fin de mes: ventas reales ya ocurridas este mes +
+    # la suma de las predicciones diarias para los días restantes.
+    hoy = datetime.now().date()
+    inicio_mes = hoy.replace(day=1)
+    df['fecha_dt'] = df['fecha'].apply(lambda f: pd.to_datetime(f, format='%d-%m-%Y', errors='coerce'))
+    df['precio_num'] = pd.to_numeric(df.get('precio', 0), errors='coerce').fillna(0)
+    ventas_mes_actual = float(df[df['fecha_dt'].dt.date >= inicio_mes]['precio_num'].sum())
+    ticket_promedio = float(df['precio_num'].mean()) if len(df) else 2000.0
+
+    dias_restantes_mes = [d for d in dias_7 if datetime.strptime(d['fecha'], '%Y-%m-%d').date().month == hoy.month]
+    proyeccion_pedidos_p10 = sum(d['p10'] for d in dias_restantes_mes)
+    proyeccion_pedidos_p50 = sum(d['p50'] for d in dias_restantes_mes)
+    proyeccion_pedidos_p90 = sum(d['p90'] for d in dias_restantes_mes)
+
+    meta = round(ventas_mes_actual * 1.1) if ventas_mes_actual > 0 else None
+
+    return {
+        "manana": manana,
+        "dias_7": dias_7,
+        "proyeccion_mes": {
+            "actual": round(ventas_mes_actual),
+            "p10": round(ventas_mes_actual + proyeccion_pedidos_p10 * ticket_promedio),
+            "p50": round(ventas_mes_actual + proyeccion_pedidos_p50 * ticket_promedio),
+            "p90": round(ventas_mes_actual + proyeccion_pedidos_p90 * ticket_promedio),
+            "meta": meta,
+        },
+        "precision_historica_pct": validacion['mape_pct'],
+        "dias_evaluados": validacion['dias_evaluados'],
+    }
+
+
+@app.get("/predictor/clientes-riesgo", response_model=Dict)
+def get_predictor_clientes_riesgo():
+    """Clientes en riesgo: cadencia personal por cliente, probabilidad
+    empírica de reorden, priorizados por valor en juego."""
+    try:
+        pedidos = data_adapter.obtener_pedidos_combinados()
+    except Exception as e:
+        logger.error(f"Error al obtener pedidos para riesgo de clientes: {e}", exc_info=True)
+        return {"resumen": {"activos": 0, "en_riesgo": 0, "inactivos": 0}, "clientes": []}
+
+    df = pd.DataFrame(pedidos)
+    if 'nombrelocal' in df.columns:
+        df = df[df['nombrelocal'].astype(str).str.strip().str.lower() == 'aguas ancud']
+
+    return customer_risk_service.calcular_riesgo_clientes(df.to_dict('records'))
+
+# Servir frontend estático (debe ir al final, después de todas las rutas API)
+_BASE = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIST = os.path.normpath(os.path.join(_BASE, "..", "frontend", "dist"))
+logger.info(f"Frontend dist path: {FRONTEND_DIST} — exists: {os.path.exists(FRONTEND_DIST)}")
+
+if os.path.exists(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_root():
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
