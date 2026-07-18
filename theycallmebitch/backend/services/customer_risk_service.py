@@ -20,6 +20,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from services.rfm_engine import SEGMENTOS
+
 logger = logging.getLogger(__name__)
 
 VENTANA_REORDEN_DIAS = 15
@@ -145,7 +147,10 @@ def calcular_riesgo_clientes(pedidos: List[Dict]) -> Dict:
             # Un solo pedido histórico: no hay cadencia propia que calcular.
             dias_atraso = 0
             probabilidad = None
-            umbral_inactivo = 45  # respaldo genérico solo para este caso
+            # Un solo pedido histórico == cliente de baja frecuencia == segmento
+            # 'nuevo' en términos RFM; se usa su umbral como respaldo, tal
+            # como pide la spec.
+            umbral_inactivo = SEGMENTOS['nuevo']['churn_dias']
 
         if probabilidad is None:
             probabilidad = PROBABILIDAD_RESPALDO_AL_DIA if dias_atraso <= 0 else PROBABILIDAD_RESPALDO_ATRASADO
