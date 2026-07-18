@@ -685,7 +685,6 @@ export default function Clientes({ refreshTrigger = 0 }) {
   // Estadísticas rápidas
   const totalClientes = clientes.length;
   const totalClientesActivos = clientesConEstado.filter(c => c.estado === 'Activo').length;
-  const totalClientesVIP = clientes.filter(c => c.total_comprado > 0).length;
   const totalVentas = clientes.reduce((sum, c) => sum + (c.total_comprado || 0), 0);
   // Calcular churn (clientes inactivos)
   const churnAbs = clientesConEstado.filter(c => c.estado === 'Inactivo').length;
@@ -749,14 +748,8 @@ export default function Clientes({ refreshTrigger = 0 }) {
   // Determinar si el crecimiento de clientes nuevos es positivo
   const clientesNuevosCrecimiento = clientesNuevos - clientesNuevosAnterior;
 
-  // Card: Clientes en Riesgo (60-75 días sin comprar)
-  const clientesEnRiesgo = clientesConEstado.filter(c => {
-    const fechaUltimo = parseFecha(c.ultimo_pedido || '');
-    if (!fechaUltimo) return false;
-    const hoy = new Date();
-    const diff = (hoy - fechaUltimo) / (1000 * 60 * 60 * 24);
-    return diff > 60 && diff <= 75;
-  }).length;
+  // Card: Clientes en Riesgo (según cadencia personal de compra, mismo cálculo que el Predictor)
+  const clientesEnRiesgo = clientesConEstado.filter(c => c.estado === 'En Riesgo').length;
 
   // Lista: Top 15 Ticket Promedio
   const topTicketPromedio = [...clientesVIP, ...clientesFrecuencia]
@@ -848,14 +841,8 @@ export default function Clientes({ refreshTrigger = 0 }) {
   const generarNotificaciones = () => {
     const notificaciones = [];
     
-    // Clientes en riesgo (60-75 días sin comprar)
-    const clientesEnRiesgo = clientesConEstado.filter(c => {
-      const fechaUltimo = parseFecha(c.ultimo_pedido || '');
-      if (!fechaUltimo) return false;
-      const hoy = new Date();
-      const diff = (hoy - fechaUltimo) / (1000 * 60 * 60 * 24);
-      return diff > 60 && diff <= 75;
-    });
+    // Clientes en riesgo (según cadencia personal de compra, mismo cálculo que el Predictor)
+    const clientesEnRiesgo = clientesConEstado.filter(c => c.estado === 'En Riesgo');
     
     clientesEnRiesgo.forEach(cliente => {
       notificaciones.push({
@@ -1136,7 +1123,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       transition: 'background-color 0.2s ease'
                     }}>
                       <TableCell>
-                        <Tooltip title={cliente.estado === 'critico' ? 'Cliente en riesgo crítico' : 'Cliente en riesgo moderado'} arrow>
+                        <Tooltip title={cliente.dias_atraso > 65 ? 'Cliente en riesgo crítico' : 'Cliente en riesgo moderado'} arrow>
                           <Box sx={{ 
                             width: 12,
                             height: 12,
@@ -1274,7 +1261,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                       transition: 'background-color 0.2s ease'
                     }}>
                       <TableCell>
-                        <Tooltip title={cliente.estado === 'activo' ? 'Cliente VIP activo' : 'Cliente VIP inactivo'} arrow>
+                        <Tooltip title={cliente.estado === 'Activo' ? 'Cliente VIP activo' : 'Cliente VIP inactivo'} arrow>
                           <Box sx={{ 
                             width: 12,
                             height: 12,
@@ -2189,7 +2176,7 @@ export default function Clientes({ refreshTrigger = 0 }) {
                 onClick={() => setShowRiesgoTable(!showRiesgoTable)}
                 >
                   <CardContent sx={{ p: 3, position: 'relative' }}>
-                    <Tooltip title="Clientes que llevan entre 60 y 75 días sin comprar (cerca de volverse inactivos). Click para ver detalles." placement="top" arrow>
+                    <Tooltip title="Clientes cuyo atraso supera su cadencia personal de compra (mismo cálculo que el Predictor). Click para ver detalles." placement="top" arrow>
                       <Typography variant="h4" sx={{ 
                         fontWeight: 700, 
                         color: showRiesgoTable ? 'white' : 'text.primary', 
