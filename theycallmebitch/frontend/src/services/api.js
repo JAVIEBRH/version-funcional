@@ -139,13 +139,6 @@ export async function getClientes() {
     
     if (IS_DEV) {
       console.log('Clientes obtenidos exitosamente:', data.length, 'registros');
-      // Buscar específicamente a Walker solo en desarrollo
-      const walker = data.find(c => c.usuario === 'walker0726@fluvi.cl' || c.correo === 'walker0726@fluvi.cl');
-      if (walker) {
-        console.log('Walker encontrado en datos:', walker);
-      } else {
-        console.log('Walker NO encontrado en datos del backend');
-      }
     }
     
     return data;
