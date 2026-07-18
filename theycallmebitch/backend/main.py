@@ -2852,10 +2852,25 @@ def get_ventas_locales_test():
         "clientes_unicos": 15
     }
 
+_cache_predictor_demanda = {"respuesta": None, "timestamp": 0}
+_CACHE_PREDICTOR_DEMANDA_TTL = 600  # 10 min — coincide con el auto-refresh del frontend
+
+
 @app.get("/predictor/demanda", response_model=Dict)
 def get_predictor_demanda():
     """Pronóstico de demanda: próximos 7 días con rango P10-P90 y
-    proyección de fin de mes, más la precisión histórica real del modelo."""
+    proyección de fin de mes, más la precisión histórica real del modelo.
+
+    Entrenar los 3 modelos de cuantiles + la validación walk-forward (hasta
+    30 reentrenamientos) toma varios segundos; se cachea la respuesta por
+    unos minutos para que no cada carga de la página quede esperando ese
+    cómputo completo — los pedidos reales no cambian tan seguido como para
+    justificarlo en cada request."""
+    ahora = datetime.now().timestamp()
+    if _cache_predictor_demanda["respuesta"] is not None and \
+            (ahora - _cache_predictor_demanda["timestamp"]) < _CACHE_PREDICTOR_DEMANDA_TTL:
+        return _cache_predictor_demanda["respuesta"]
+
     try:
         pedidos = data_adapter.obtener_pedidos_combinados()
     except Exception as e:
@@ -2882,11 +2897,14 @@ def get_predictor_demanda():
     dias_7 = dias_horizonte[:7]
 
     if not dias_7:
-        return {
+        resultado = {
             "dias_7": [], "manana": None, "proyeccion_mes": None,
             "precision_historica_pct": validacion['mape_pct'],
             "dias_evaluados": validacion['dias_evaluados'],
         }
+        _cache_predictor_demanda["respuesta"] = resultado
+        _cache_predictor_demanda["timestamp"] = ahora
+        return resultado
 
     manana = dias_7[0]
 
@@ -2906,7 +2924,7 @@ def get_predictor_demanda():
 
     meta = round(ventas_mes_actual * 1.1) if ventas_mes_actual > 0 else None
 
-    return {
+    resultado = {
         "manana": manana,
         "dias_7": dias_7,
         "proyeccion_mes": {
@@ -2919,6 +2937,9 @@ def get_predictor_demanda():
         "precision_historica_pct": validacion['mape_pct'],
         "dias_evaluados": validacion['dias_evaluados'],
     }
+    _cache_predictor_demanda["respuesta"] = resultado
+    _cache_predictor_demanda["timestamp"] = ahora
+    return resultado
 
 
 @app.get("/predictor/clientes-riesgo", response_model=Dict)
