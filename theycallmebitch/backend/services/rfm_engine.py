@@ -75,7 +75,7 @@ def calcular_rfm(pedidos: List[Dict]) -> Dict:
 
         # Enriquecer con dirección y teléfono
         info = df.sort_values('fecha_dt', ascending=False).drop_duplicates('usuario').set_index('usuario')
-        rfm['direccion'] = rfm['usuario'].map(lambda u: info.loc[u, 'dire'] if u in info.index else '')
+        rfm['direccion'] = rfm['usuario'].map(lambda u: info.loc[u, 'dire'] if u in info.index and 'dire' in info.columns else '')
         rfm['telefono'] = rfm['usuario'].map(lambda u: info.loc[u, 'telefonou'] if u in info.index and 'telefonou' in info.columns else '')
 
         # Calcular cadencia promedio por cliente (dias entre pedidos)
@@ -144,6 +144,8 @@ def calcular_rfm(pedidos: List[Dict]) -> Dict:
         revenue_perdido = int(rfm[rfm['segmento'] == 'perdido']['monetario'].sum())
         ticket_promedio_global = int(rfm['monetario'].sum() / rfm['frecuencia'].sum()) if rfm['frecuencia'].sum() > 0 else 0
 
+        segmento_por_cliente = dict(zip(rfm['usuario'], rfm['segmento']))
+
         return {
             'total_clientes': total_clientes,
             'clientes_en_riesgo_count': total_en_riesgo,
@@ -154,6 +156,7 @@ def calcular_rfm(pedidos: List[Dict]) -> Dict:
             'resumen_segmentos': resumen_segmentos,
             'clientes_en_riesgo': clientes_en_riesgo,
             'clientes_campeon': clientes_campeon,
+            'segmento_por_cliente': segmento_por_cliente,
         }
 
     except Exception as e:
@@ -216,4 +219,5 @@ def _respuesta_vacia() -> Dict:
         'resumen_segmentos': [],
         'clientes_en_riesgo': [],
         'clientes_campeon': [],
+        'segmento_por_cliente': {},
     }
