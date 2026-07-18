@@ -3,6 +3,7 @@ Capa de adaptación de datos para unificar formatos antiguos y nuevos
 Mantiene compatibilidad total con el frontend existente
 """
 
+import os
 import requests
 import json
 from datetime import datetime
@@ -21,6 +22,16 @@ ENDPOINT_PEDIDOS_NUEVO = "https://gobackend-qomm.onrender.com/api/store/orders"
 STORE_ID = "68697bf9c8e5172fd536738f"
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+# Snapshot local con pedidos previos a la migración al backend nuevo.
+# El endpoint legacy en vivo (ENDPOINT_PEDIDOS_ANTIGUO) dejó de responder (404),
+# así que este archivo es la única fuente de esos pedidos antiguos.
+RUTA_SNAPSHOT_PEDIDOS_ANTIGUOS = os.path.join(os.path.dirname(__file__), '..', 'datos_pedidos.json')
+
+# La API nueva ya tiene cobertura completa desde esta fecha en adelante.
+# Se usa para no contar dos veces los pedidos que están tanto en el snapshot
+# local como en la API nueva.
+FECHA_CORTE_SNAPSHOT = datetime(2025, 8, 13)
 
 # Modelos Pydantic para validación
 class PedidoAntiguo(BaseModel):
@@ -123,16 +134,35 @@ class DataAdapter:
         return (datetime.now().timestamp() - self.cache_timestamp) < self.cache_duration
     
     def fetch_pedidos_antiguos(self) -> List[Dict]:
-        """Obtiene pedidos del endpoint antiguo"""
+        """Obtiene pedidos previos a la migración desde el snapshot local.
+
+        El endpoint legacy en vivo (fluvi.cl) dejó de responder (404), por lo
+        que los pedidos anteriores a FECHA_CORTE_SNAPSHOT se leen de
+        datos_pedidos.json. Solo se devuelven pedidos anteriores a esa fecha
+        de corte para no duplicar los que la API nueva ya cubre.
+        """
         try:
-            logger.info("Obteniendo pedidos del endpoint antiguo...")
-            response = requests.get(ENDPOINT_PEDIDOS_ANTIGUO, headers=HEADERS, timeout=10)
-            response.raise_for_status()
-            pedidos = response.json()
-            logger.info(f"Pedidos antiguos obtenidos: {len(pedidos)} registros")
-            return pedidos
+            logger.info("Cargando snapshot local de pedidos antiguos...")
+            with open(RUTA_SNAPSHOT_PEDIDOS_ANTIGUOS, 'r', encoding='utf-8-sig') as f:
+                data = json.load(f)
+            pedidos = data.get('value', []) if isinstance(data, dict) else data
+
+            pedidos_filtrados = []
+            for pedido in pedidos:
+                try:
+                    fecha = datetime.strptime(pedido.get('fecha', ''), '%d-%m-%Y')
+                    if fecha < FECHA_CORTE_SNAPSHOT:
+                        pedidos_filtrados.append(pedido)
+                except (ValueError, TypeError):
+                    continue
+
+            logger.info(
+                f"Pedidos antiguos del snapshot (antes de {FECHA_CORTE_SNAPSHOT.date()}): "
+                f"{len(pedidos_filtrados)} de {len(pedidos)} registros totales en el archivo"
+            )
+            return pedidos_filtrados
         except Exception as e:
-            logger.error(f"Error obteniendo pedidos antiguos: {e}")
+            logger.error(f"Error cargando snapshot de pedidos antiguos: {e}")
             return []
     
     def fetch_clientes_antiguos(self) -> List[Dict]:
@@ -149,15 +179,35 @@ class DataAdapter:
             return []
     
     def fetch_pedidos_nuevos(self) -> List[Dict]:
-        """Obtiene pedidos del endpoint nuevo (MongoDB)"""
+        """Obtiene TODOS los pedidos del endpoint nuevo (MongoDB), paginando.
+
+        Antes se pedía una sola página con limit=2000: en cuanto la tienda
+        superó los 2000 pedidos, los más antiguos empezaron a quedar fuera
+        de la ventana y el total dejó de crecer. Ahora se recorren todas
+        las páginas que reporte la API (totalPages) para traer el conjunto
+        completo, sin importar cuánto crezca a futuro.
+        """
         try:
-            logger.info("Obteniendo pedidos del endpoint nuevo...")
-            url = f"{ENDPOINT_PEDIDOS_NUEVO}?storeId={STORE_ID}&limit=1000"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            pedidos = data.get('data', {}).get('docs', []) if data.get('success') else []
-            logger.info(f"Pedidos nuevos obtenidos: {len(pedidos)} registros")
+            logger.info("Obteniendo pedidos del endpoint nuevo (paginado completo)...")
+            limit = 500
+            pedidos: List[Dict] = []
+            page = 1
+            total_pages = 1
+
+            while page <= total_pages:
+                url = f"{ENDPOINT_PEDIDOS_NUEVO}?storeId={STORE_ID}&limit={limit}&page={page}"
+                response = requests.get(url, timeout=15)
+                response.raise_for_status()
+                data = response.json()
+                if not data.get('success'):
+                    break
+
+                pagina = data.get('data', {})
+                pedidos.extend(pagina.get('docs', []))
+                total_pages = pagina.get('totalPages', 1)
+                page += 1
+
+            logger.info(f"Pedidos nuevos obtenidos: {len(pedidos)} registros ({total_pages} páginas)")
             return pedidos
         except Exception as e:
             logger.error(f"Error obteniendo pedidos nuevos: {e}")
@@ -166,17 +216,28 @@ class DataAdapter:
     def convertir_pedido_nuevo_a_antiguo(self, pedido_nuevo: Dict) -> Dict:
         """Convierte un pedido del formato nuevo al formato antiguo"""
         try:
-            # Parsear fecha ISO
+            # Parsear fecha ISO (con soporte de milisegundos y zona horaria Chile UTC-4)
             fecha_iso = pedido_nuevo.get('createdAt', '')
             fecha_dt = None
             if fecha_iso:
                 try:
-                    fecha_dt = datetime.fromisoformat(fecha_iso.replace('Z', '+00:00'))
-                except:
+                    # Eliminar milisegundos antes de parsear (fromisoformat no los soporta en Python < 3.11)
+                    fecha_clean = fecha_iso.replace('Z', '+00:00')
+                    if '.' in fecha_clean:
+                        parte_fecha = fecha_clean.split('.')[0]
+                        fecha_clean = parte_fecha + '+00:00'
+                    fecha_dt = datetime.fromisoformat(fecha_clean)
+                    # Convertir de UTC a hora local Chile (UTC-4)
+                    from datetime import timezone, timedelta
+                    CHILE_TZ = timezone(timedelta(hours=-4))
+                    fecha_dt = fecha_dt.astimezone(CHILE_TZ)
+                except Exception as e:
+                    logger.warning(f"Error parseando fecha ISO '{fecha_iso}': {e}, usando fecha actual")
                     fecha_dt = datetime.now()
             
-            # Extraer datos del customer
-            customer = pedido_nuevo.get('customer', {})
+            # Extraer datos del customer (puede venir como null explícito en ventas
+            # de mostrador sin cliente asociado, no solo ausente)
+            customer = pedido_nuevo.get('customer') or {}
             
             # Convertir deliverySchedule
             delivery_schedule = pedido_nuevo.get('deliverySchedule', {})
@@ -209,8 +270,8 @@ class DataAdapter:
             # Extraer deliveryPerson
             delivery_person = pedido_nuevo.get('deliveryPerson', {})
             
-            # Extraer rating
-            rating = pedido_nuevo.get('rating', {})
+            # Extraer rating (could be None)
+            rating = pedido_nuevo.get('rating') or {}
             
             # Construir pedido en formato antiguo
             pedido_antiguo = {
@@ -330,6 +391,17 @@ class DataAdapter:
             
             logger.info(f"Pedidos combinados: {len(pedidos_combinados)} registros")
             
+            # Excluir registros sin usuario NI dirección (cobros administrativos, no despachos reales).
+            # Excepción: las ventas del local físico (retirolocal='si') son legítimamente así —
+            # un cliente que compra en mostrador no tiene dirección de entrega ni usuario registrado —
+            # así que no deben descartarse por este mismo motivo.
+            pedidos_combinados = [
+                p for p in pedidos_combinados
+                if str(p.get('retirolocal', '')).strip().lower() == 'si'
+                or not (str(p.get('usuario', '')).strip() == '' and str(p.get('dire', '')).strip() == '')
+            ]
+            logger.info(f"Pedidos tras filtro de calidad: {len(pedidos_combinados)} registros")
+
             # Actualizar cache
             self.pedidos_antiguos_cache = pedidos_combinados
             self.cache_timestamp = datetime.now().timestamp()
