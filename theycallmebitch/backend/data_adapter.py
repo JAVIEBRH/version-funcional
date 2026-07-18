@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 # URLs de los endpoints
 ENDPOINT_PEDIDOS_ANTIGUO = "https://fluvi.cl/fluviDos/GoApp/endpoints/pedidos.php"
-ENDPOINT_CLIENTES_ANTIGUO = "https://fluvi.cl/fluviDos/GoApp/endpoints/clientes.php"
 ENDPOINT_PEDIDOS_NUEVO = "https://gobackend-qomm.onrender.com/api/store/orders"
 STORE_ID = "68697bf9c8e5172fd536738f"
 
@@ -122,7 +121,6 @@ class DataAdapter:
     
     def __init__(self):
         self.pedidos_antiguos_cache = None
-        self.clientes_antiguos_cache = None
         self.pedidos_nuevos_cache = None
         self.cache_timestamp = None
         self.cache_duration = 1800  # 30 minutos
@@ -163,19 +161,6 @@ class DataAdapter:
             return pedidos_filtrados
         except Exception as e:
             logger.error(f"Error cargando snapshot de pedidos antiguos: {e}")
-            return []
-    
-    def fetch_clientes_antiguos(self) -> List[Dict]:
-        """Obtiene clientes del endpoint antiguo"""
-        try:
-            logger.info("Obteniendo clientes del endpoint antiguo...")
-            response = requests.get(ENDPOINT_CLIENTES_ANTIGUO, headers=HEADERS, timeout=10)
-            response.raise_for_status()
-            clientes = response.json()
-            logger.info(f"Clientes antiguos obtenidos: {len(clientes)} registros")
-            return clientes
-        except Exception as e:
-            logger.error(f"Error obteniendo clientes antiguos: {e}")
             return []
     
     def fetch_pedidos_nuevos(self) -> List[Dict]:
@@ -358,18 +343,6 @@ class DataAdapter:
             logger.error(f"Error combinando pedidos: {e}")
             return pedidos_antiguos  # Fallback a solo antiguos
     
-    def combinar_clientes(self, clientes_antiguos: List[Dict], clientes_nuevos: List[Dict]) -> List[Dict]:
-        """Combina clientes antiguos y nuevos"""
-        try:
-            # Por ahora, solo devolvemos los clientes antiguos
-            # Los clientes nuevos se pueden extraer de los pedidos si es necesario
-            logger.info(f"Clientes combinados: {len(clientes_antiguos)} total")
-            return clientes_antiguos
-            
-        except Exception as e:
-            logger.error(f"Error combinando clientes: {e}")
-            return clientes_antiguos
-    
     def obtener_pedidos_combinados(self) -> List[Dict]:
         """Obtiene pedidos combinados (antiguos + nuevos) con cache"""
         logger.info(f"Cache válido: {self._is_cache_valid()}, Cache disponible: {self.pedidos_antiguos_cache is not None}")
@@ -415,34 +388,6 @@ class DataAdapter:
             if self.pedidos_antiguos_cache is not None:
                 logger.info("Usando cache como fallback debido a error")
                 return self.pedidos_antiguos_cache
-            return []
-    
-    def obtener_clientes_combinados(self) -> List[Dict]:
-        """Obtiene clientes combinados (antiguos + nuevos) con cache"""
-        if self._is_cache_valid() and self.clientes_antiguos_cache is not None:
-            logger.info("Usando cache de clientes")
-            return self.clientes_antiguos_cache
-        
-        try:
-            # Obtener datos de ambas fuentes
-            clientes_antiguos = self.fetch_clientes_antiguos()
-            clientes_nuevos = []  # Por ahora no hay endpoint de clientes nuevos
-            
-            # Combinar
-            clientes_combinados = self.combinar_clientes(clientes_antiguos, clientes_nuevos)
-            
-            # Actualizar cache
-            self.clientes_antiguos_cache = clientes_combinados
-            self.cache_timestamp = datetime.now().timestamp()
-            
-            return clientes_combinados
-            
-        except Exception as e:
-            logger.error(f"Error obteniendo clientes combinados: {e}")
-            # Fallback: usar cache si está disponible
-            if self.clientes_antiguos_cache is not None:
-                logger.info("Usando cache de clientes como fallback debido a error")
-                return self.clientes_antiguos_cache
             return []
 
 # Instancia global del adaptador

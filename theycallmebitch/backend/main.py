@@ -39,6 +39,7 @@ from services.briefing_service import generar_briefing
 from services import geocoding_service
 from services import demand_forecast_service
 from services import customer_risk_service
+from services import customer_profile_service
 
 # from services.kpi_calculator import kpi_calculator
 # from utils.cache_manager import cache_manager
@@ -375,83 +376,55 @@ def get_pedidos():
 
 @app.get("/clientes", response_model=List[Dict])
 def get_clientes():
-    """Obtener clientes combinados (históricos + actuales) en formato original"""
+    """Perfil agregado de clientes: se agrupan todos los pedidos por
+    usuario (no hay una base de clientes real — ver
+    docs/superpowers/specs/2026-07-18-clientes-redesign-design.md), usando
+    el pedido más reciente para contacto. Estado viene de la misma
+    cadencia personal que usa el Predictor; tipo (VIP/Regular) viene del
+    segmento RFM."""
     try:
-        logger.info("Obteniendo clientes combinados usando capa de adaptación...")
-        clientes = data_adapter.obtener_clientes_combinados()
-        logger.info(f"Clientes combinados obtenidos: {len(clientes)} registros")
-        
-        # Validar que haya datos
-        if not clientes:
-            logger.warning("No hay clientes del endpoint antiguo, extrayendo de pedidos...")
-            pedidos = data_adapter.obtener_pedidos_combinados()
-            if pedidos:
-                clientes = extraer_clientes_de_pedidos(pedidos)
-                logger.info(f"Clientes extraídos de pedidos: {len(clientes)} registros")
-            else:
-                logger.warning("No hay pedidos disponibles para extraer clientes")
-                return []
-        
-        # Validar estructura de clientes
-        clientes_validos = []
-        clientes_invalidos = 0
-        for cliente in clientes:
-            if isinstance(cliente, dict):
-                # Validar campos mínimos
-                if 'id' in cliente or 'idcliente' in cliente or 'correo' in cliente or 'usuario' in cliente:
-                    clientes_validos.append(cliente)
-                else:
-                    clientes_invalidos += 1
-                    logger.debug(f"Cliente sin campos mínimos: {cliente}")
-            else:
-                clientes_invalidos += 1
-        
-        if clientes_invalidos > 0:
-            logger.warning(f"{clientes_invalidos} clientes con estructura inválida fueron omitidos")
-        
-        logger.info(f"Retornando {len(clientes_validos)} clientes validados")
-        return clientes_validos
-        
+        pedidos = data_adapter.obtener_pedidos_combinados()
     except Exception as e:
-        logger.error(f"Error al obtener clientes combinados: {e}", exc_info=True)
+        logger.error(f"Error al obtener pedidos para /clientes: {e}", exc_info=True)
         return []
 
-def extraer_clientes_de_pedidos(pedidos: List[Dict]) -> List[Dict]:
-    """Extrae clientes únicos de los pedidos"""
-    try:
-        clientes_dict = {}
-        
-        for pedido in pedidos:
-            usuario = pedido.get('usuario', '')
-            if usuario and usuario not in clientes_dict:
-                clientes_dict[usuario] = {
-                    'id': pedido.get('id', ''),
-                    'idcliente': pedido.get('id', ''),
-                    'nombre': usuario.split('@')[0] if '@' in usuario else usuario,
-                    'correo': usuario,
-                    'clave': '',
-                    'direc': pedido.get('dire', ''),
-                    'comuna': pedido.get('comuna', ''),
-                    'deptoblock': pedido.get('deptoblock', ''),
-                    'lat': pedido.get('lat', ''),
-                    'lon': pedido.get('lon', ''),
-                    'telefono': pedido.get('telefonou', ''),
-                    'verificar': '1',
-                    'notifictoken': pedido.get('notific', ''),
-                    'fecha': pedido.get('fecha', ''),
-                    'dia': pedido.get('dia', ''),
-                    'mes': pedido.get('mes', ''),
-                    'ano': pedido.get('ano', ''),
-                    'localoficial': 'wgxlp3dB1YxbdmT',
-                    'dispositivo': '',
-                    'v': '2.0.0'
-                }
-        
-        return list(clientes_dict.values())
-        
-    except Exception as e:
-        logger.error(f"Error extrayendo clientes de pedidos: {e}", exc_info=True)
+    df = pd.DataFrame(pedidos)
+    if 'nombrelocal' in df.columns:
+        df = df[df['nombrelocal'].astype(str).str.strip().str.lower() == 'aguas ancud']
+    pedidos_filtrados = df.to_dict('records')
+
+    perfiles = customer_profile_service.construir_perfiles_clientes(pedidos_filtrados)
+    if not perfiles:
         return []
+
+    riesgo = customer_risk_service.calcular_riesgo_clientes(pedidos_filtrados)
+    estado_por_usuario = {c['usuario']: c for c in riesgo['clientes']}
+
+    try:
+        rfm_data = calcular_rfm(pedidos_filtrados)
+        segmento_por_usuario = rfm_data.get('segmento_por_cliente', {})
+    except Exception as e:
+        logger.error(f"Error calculando RFM para /clientes: {e}", exc_info=True)
+        segmento_por_usuario = {}
+
+    segmentos_vip = {'campeon', 'leal'}
+
+    resultado = []
+    for perfil in perfiles:
+        usuario = perfil['usuario']
+        riesgo_cliente = estado_por_usuario.get(usuario)
+        segmento = segmento_por_usuario.get(usuario)
+
+        resultado.append({
+            **perfil,
+            'estado': riesgo_cliente['estado'] if riesgo_cliente else 'activo',
+            'dias_atraso': riesgo_cliente['dias_atraso'] if riesgo_cliente else 0,
+            'cadencia_personal_dias': riesgo_cliente['cadencia_personal_dias'] if riesgo_cliente else None,
+            'tipo': 'VIP' if segmento in segmentos_vip else 'Regular',
+        })
+
+    resultado.sort(key=lambda c: c['total_comprado'], reverse=True)
+    return resultado
 
 @app.get("/pedidos-v2", response_model=List[Dict])
 def get_pedidos_v2():
