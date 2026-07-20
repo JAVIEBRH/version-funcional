@@ -4,7 +4,7 @@ echo   INICIANDO BACKEND - AGUAS ANCUD
 echo ================================================
 echo.
 
-cd /d "C:\Users\Javier\Desktop\proyectoreatc\theycallmebitch\backend"
+cd /d "C:\Users\Javier\Desktop\portafolio\AGUAS-ANCUD\rediseno dashboard ancud\version-funcional\theycallmebitch\backend"
 
 echo Verificando Python...
 python --version

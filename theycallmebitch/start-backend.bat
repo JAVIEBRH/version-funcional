@@ -4,7 +4,7 @@ echo    INICIANDO BACKEND - AGUAS ANCUD
 echo ========================================
 echo.
 
-cd /d "%~dp0backend"
+cd /d "C:\Users\Javier\Desktop\portafolio\AGUAS-ANCUD\rediseno dashboard ancud\version-funcional\theycallmebitch\backend"
 
 echo Instalando dependencias...
 pip install -r requirements.txt
