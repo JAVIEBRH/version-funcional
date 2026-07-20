@@ -41,9 +41,6 @@ from services import demand_forecast_service
 from services import customer_risk_service
 from services import customer_profile_service
 
-# from services.kpi_calculator import kpi_calculator
-# from utils.cache_manager import cache_manager
-
 app = FastAPI(title="API Aguas Ancud", version="2.0")
 
 # Configuración de CORS para desarrollo y producción
