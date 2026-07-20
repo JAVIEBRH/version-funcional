@@ -1,453 +1,328 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* ───────────────────────────────────────────────────────────────────
+   Aguas Ancud Dashboard — Global Styles 2026
+   Aesthetic: Deep Water Float
+   Fonts: Plus Jakarta Sans (display) + DM Sans (body)
+─────────────────────────────────────────────────────────────────── */
 
-* {
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
+/* ── Design Tokens ───────────────────────────────────────────────── */
+:root {
+  --color-primary:        #06b6d4;   /* cyan-500 — water blue  */
+  --color-primary-dim:    rgba(6,182,212,0.18);
+  --color-primary-glow:   rgba(6,182,212,0.30);
+  --color-secondary:      #0d9488;   /* teal-600               */
+  --color-secondary-dim:  rgba(13,148,136,0.15);
+  --color-success:        #10b981;
+  --color-success-dim:    rgba(16,185,129,0.15);
+  --color-danger:         #ef4444;
+  --color-danger-dim:     rgba(239,68,68,0.15);
+  --color-warning:        #f59e0b;
+
+  /* Dark surfaces */
+  --bg-dark:         #040a14;
+  --bg-card-dark:    rgba(255,255,255,0.042);
+  --border-dark:     rgba(255,255,255,0.09);
+  --rim-dark:        rgba(255,255,255,0.04);
+  --shadow-dark:     0 1px 2px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.35), 0 12px 48px rgba(0,0,0,0.25);
+  --shadow-dark-hover: 0 2px 4px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4), 0 16px 64px rgba(6,182,212,0.10), 0 0 0 1px rgba(6,182,212,0.22);
+
+  /* Light surfaces */
+  --bg-light:        #edf2f8;
+  --bg-card-light:   rgba(255,255,255,0.88);
+  --border-light:    rgba(0,0,0,0.07);
+  --shadow-light:    0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.07);
+  --shadow-light-hover: 0 4px 12px rgba(0,0,0,0.08), 0 12px 40px rgba(8,145,178,0.12), 0 0 0 1px rgba(8,145,178,0.18);
+
+  /* Radii */
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  22px;
+  --radius-2xl: 28px;
+
+  /* Typography */
+  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+
+  /* Easing */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-float:    cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  /* Transitions */
+  --tx-fast:   0.15s var(--ease-standard);
+  --tx-normal: 0.25s var(--ease-standard);
+  --tx-spring: 0.4s  var(--ease-spring);
+  --tx-float:  0.35s var(--ease-float);
+}
+
+/* ── Reset ───────────────────────────────────────────────────────── */
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* ── Base ────────────────────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.6;
+  color: #0a1628;
+  background-color: var(--bg-light);
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
 }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  background-color: #f8fafc;
-  color: #1e293b;
-  line-height: 1.6;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.number-display,
+[class*="kpi-value"],
+[class*="MuiTypography-h"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "kern" 1, "tnum" 1;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
-/* Mejoras globales de tipografía */
-h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #0f172a;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
-}
+#root { min-height: 100vh; }
 
-p {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-weight: 400;
-  color: #374151;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
-}
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar          { width: 5px; height: 5px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: rgba(0,0,0,0.12); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
 
-/* Scrollbar personalizada */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+.dark-mode ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); }
+.dark-mode ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* Selección de texto */
-::selection {
-  background: #3b82f6;
-  color: white;
-}
-
-/* Focus visible para accesibilidad */
+/* ── Focus ───────────────────────────────────────────────────────── */
 *:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
-#root {
-  min-height: 100vh;
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAMES
+══════════════════════════════════════════════════════════════════ */
+
+/* Card entrance — spring bounce float */
+@keyframes cardFloatIn {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.97); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+/* Staggered card entrance */
+@keyframes cardRise {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.kpi-card, .kpi-card.big, .kpi-card.kpi-panel-objetivos, .kpi-card.kpi-litros-vendidos, .kpi-card.kpi-pedidos-bloque {
-  background: rgba(40, 48, 72, 0.85);
-  border-radius: 18px;
-  padding: 28px 24px 24px 24px;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
-  backdrop-filter: blur(8px);
-  border: 1.5px solid rgba(102, 126, 234, 0.18);
-  transition: box-shadow 0.2s;
+/* Ambient floating orbs */
+@keyframes orbFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25%  { transform: translate(24px, -18px) scale(1.06); }
+  50%  { transform: translate(-10px, 22px) scale(0.96); }
+  75%  { transform: translate(18px, 10px) scale(1.03); }
 }
 
-.kpi-card.big {
-  min-width: 260px;
-  min-height: 180px;
+@keyframes orbFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(-30px, -24px) scale(1.08); }
+  66%  { transform: translate(20px, 16px) scale(0.94); }
 }
 
-.kpi-header .kpi-icon {
-  background: linear-gradient(135deg, #38bdf8 0%, #667eea 100%);
-  color: #fff;
-  border-radius: 12px;
-  padding: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
+@keyframes orbFloat3 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translate(-16px, -30px) rotate(10deg); }
+}
+
+/* Gradient text shimmer */
+@keyframes gradientShift {
+  0%   { background-position: 0% center; }
+  50%  { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+
+/* Status dot pulse */
+@keyframes statusPulse {
+  0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50%       { transform: scale(1.15); opacity: 0.9; box-shadow: 0 0 0 4px rgba(16,185,129,0); }
+}
+
+/* Shimmer skeleton */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+/* Liquid progress fill */
+@keyframes liquidFill {
+  from { width: 0%; }
+  to   { /* width set inline */ }
+}
+
+/* Spin */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Fade + slide up */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Subtle breathe for active indicator */
+@keyframes breathe {
+  0%, 100% { opacity: 0.8; }
+  50%       { opacity: 1; }
+}
+
+/* ── Animation utility classes ───────────────────────────────────── */
+.fade-slide-up { animation: fadeSlideUp 0.45s var(--ease-spring) both; }
+.card-float-in { animation: cardFloatIn 0.55s var(--ease-spring) both; }
+
+/* Stagger helpers */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.30s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.40s; }
+
+/* ── Shimmer Skeleton ────────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0)    0%,
+    rgba(255,255,255,0.10) 40%,
+    rgba(255,255,255,0.22) 50%,
+    rgba(255,255,255,0.10) 60%,
+    rgba(255,255,255,0)   100%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.8s infinite;
+}
+
+/* ── KPI Legacy classes ──────────────────────────────────────────── */
+.kpi-card {
+  background: var(--bg-card-dark);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-dark);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-dark);
+  transition: transform var(--tx-spring), box-shadow var(--tx-float);
+}
+
+.kpi-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-dark-hover);
 }
 
 .kpi-title {
-  color: #a5b4fc;
-  font-size: 1.1rem;
-  font-weight: 600;
+  color: rgba(148,163,184,0.85);
+  font-size: 0.7rem;
+  font-weight: 700;
   margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.1em;
 }
 
 .kpi-value-main {
-  color: #fff;
-  font-size: 2.2rem;
-  font-weight: 700;
+  color: #e2e8f0;
+  font-size: 2.1rem;
+  font-weight: 800;
   margin-bottom: 6px;
-  letter-spacing: 1px;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
 }
 
-.kpi-desc {
-  color: #bfc9e0;
-  font-size: 1rem;
-  margin-top: 8px;
-}
+.kpi-change.negative { color: #f87171; font-weight: 700; font-size: 0.875rem; }
+.kpi-change.positive { color: #34d399; font-weight: 700; font-size: 0.875rem; }
 
-.kpi-change.negative {
-  color: #f87171;
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-.kpi-change.positive {
-  color: #4ade80;
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
+/* ── Progress Bar ────────────────────────────────────────────────── */
 .progress-bar-visual {
   width: 100%;
-  height: 14px;
-  background: #232946;
-  border-radius: 8px;
-  margin: 10px 0 0 0;
+  height: 5px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 99px;
+  margin: 10px 0 0;
   overflow: hidden;
-  border: 1px solid #3b82f6;
 }
+
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #38bdf8 0%, #667eea 100%);
-  border-radius: 8px;
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  border-radius: 99px;
+  transition: width 1s var(--ease-spring);
 }
 
+/* ── Section Title ───────────────────────────────────────────────── */
 .section-title {
-  color: #38bdf8;
-  font-size: 1.5rem;
+  font-family: var(--font-display);
+  color: var(--color-primary);
+  font-size: 1.3rem;
   font-weight: 700;
-  margin: 36px 0 18px 0;
-  letter-spacing: 1px;
+  margin: 32px 0 16px;
+  letter-spacing: -0.02em;
 }
 
-.loading, .error {
-  color: #fff;
-  font-size: 1.2rem;
-  text-align: center;
-  margin-top: 60px;
-}
-
-@media (max-width: 900px) {
-  .kpis-grid, .finanzas-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 18px;
-  }
-}
-@media (max-width: 600px) {
-  .kpis-grid, .finanzas-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  .kpi-card.big {
-    min-width: unset;
-    min-height: 140px;
-    padding: 18px 10px 16px 10px;
-  }
-  .section-title {
-    font-size: 1.1rem;
-    margin: 24px 0 10px 0;
-  }
-} 
-
-/* Estilos personalizados para el calendario tipo mockup */
+/* ── Calendar ────────────────────────────────────────────────────── */
 .react-calendar {
   border: none;
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   background: #f8faff;
-  box-shadow: 0 4px 24px rgba(123, 140, 255, 0.08);
-  padding: 18px 10px 10px 10px;
-  font-family: inherit;
-}
-.react-calendar__navigation {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.react-calendar__navigation button {
-  background: none;
-  border: none;
-  color: #a78bfa;
-  font-size: 1.2rem;
-  font-weight: 700;
-  padding: 0 8px;
-  cursor: pointer;
-}
-.react-calendar__navigation__label {
-  color: #a78bfa;
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-.react-calendar__month-view__weekdays {
-  text-align: center;
-  color: #b0b0b0;
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-.react-calendar__tile {
-  border-radius: 50%;
-  height: 38px;
-  width: 38px;
-  font-size: 1.05rem;
-  color: #22223b;
-  background: none;
-  transition: background 0.2s;
-}
-.react-calendar__tile:enabled:hover,
-.react-calendar__tile:enabled:focus {
-  background: #e0e7ff;
-}
-.calendar-event-orange {
-  border: 2px solid #fbbf24 !important;
-  color: #fbbf24 !important;
-  background: #fffbe6 !important;
-}
-.calendar-event-blue {
-  border: 2px solid #7b8cff !important;
-  color: #7b8cff !important;
-  background: #f3f4ff !important;
+  box-shadow: 0 4px 24px rgba(123,140,255,0.08);
+  padding: 16px 10px 10px;
+  font-family: var(--font-body);
+  overflow: hidden;
 }
 
-/* Mejoras adicionales para calidad de texto */
-* {
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1 !important;
+.react-calendar__navigation { display: flex; justify-content: center; align-items: center; margin-bottom: 8px; }
+.react-calendar__navigation button { background: none; border: none; color: var(--color-secondary); font-size: 1rem; font-weight: 700; padding: 0 8px; cursor: pointer; border-radius: var(--radius-sm); transition: background var(--tx-fast); }
+.react-calendar__navigation button:hover { background: rgba(139,92,246,0.1); }
+.react-calendar__navigation__label { color: var(--color-secondary); font-size: 0.95rem; font-weight: 600; }
+.react-calendar__month-view__weekdays { text-align: center; color: #94a3b8; font-size: 0.73rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.react-calendar__tile { border-radius: 50%; height: 36px; width: 36px; font-size: 0.875rem; color: #334155; background: none; transition: background var(--tx-fast); font-weight: 500; }
+.react-calendar__tile:enabled:hover, .react-calendar__tile:enabled:focus { background: rgba(13,148,136,0.1); color: var(--color-secondary); }
+.react-calendar__tile--active { background: rgba(13,148,136,0.15) !important; color: #0f766e !important; border: 1.5px solid rgba(13,148,136,0.35) !important; font-weight: 700; }
+.calendar-event-orange { border: 2px solid #f59e0b !important; color: #d97706 !important; background: rgba(245,158,11,0.08) !important; }
+.calendar-event-blue { border: 2px solid var(--color-secondary) !important; color: var(--color-secondary) !important; background: rgba(139,92,246,0.08) !important; }
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+.container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+.loading, .error { color: #e2e8f0; font-size: 1rem; text-align: center; margin-top: 60px; opacity: 0.6; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 900px) { .kpis-grid, .finanzas-grid { grid-template-columns: 1fr 1fr; gap: 16px; } }
+@media (max-width: 600px) { .kpis-grid, .finanzas-grid { grid-template-columns: 1fr; gap: 12px; } }
+
+/* ── Reduced Motion ──────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-/* Mejoras específicas para números */
-.number-display {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
-
-/* Mejoras para texto en cards */
-.card-text {
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1 !important;
-}
-.react-calendar__tile--active {
-  background: #ede9fe !important;
-  color: #7b8cff !important;
-  border: 2px solid #7b8cff !important;
-} 
-
-/* Estilos globales para mejorar la calidad de las fuentes */
-* {
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  font-weight: 400 !important;
-  line-height: 1.5 !important;
-  letter-spacing: 0.00938em !important;
-  margin: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
-}
-
-/* Mejorar calidad de fuentes en Material-UI */
-.MuiTypography-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiButton-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiTextField-root .MuiInputBase-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiTableCell-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiChip-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiAlert-root .MuiAlert-message {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiSelect-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiMenuItem-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiBadge-root .MuiBadge-badge {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-.MuiTooltip-root .MuiTooltip-tooltip {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
-  text-rendering: optimizeLegibility !important;
-  font-feature-settings: "kern" 1 !important;
-  font-kerning: normal !important;
-}
-
-/* Mejorar específicamente los números grandes */
-.MuiTypography-h4 {
-  font-weight: 700 !important;
-  letter-spacing: -0.02em !important;
-  line-height: 1.2 !important;
-}
-
-/* Mejorar los títulos */
-.MuiTypography-h6 {
-  font-weight: 600 !important;
-  letter-spacing: -0.01em !important;
-}
-
-/* Mejorar el texto del cuerpo */
-.MuiTypography-body1 {
-  font-weight: 400 !important;
-  line-height: 1.6 !important;
-}
-
-.MuiTypography-body2 {
-  font-weight: 400 !important;
-  line-height: 1.5 !important;
-}
-
-/* Mejorar los chips */
-.MuiChip-label {
-  font-weight: 600 !important;
-  letter-spacing: 0.01em !important;
-}
-
-/* Mejorar los botones */
-.MuiButton-label {
-  font-weight: 500 !important;
-  letter-spacing: 0.02em !important;
-}
-
-/* Mejorar las celdas de tabla */
-.MuiTableCell-head {
-  font-weight: 600 !important;
-  letter-spacing: 0.01em !important;
-}
-
-.MuiTableCell-body {
-  font-weight: 400 !important;
-  line-height: 1.5 !important;
-} 
+/* ── High Contrast ───────────────────────────────────────────────── */
+@media (prefers-contrast: high) { * { border-color: currentColor !important; } }

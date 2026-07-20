@@ -7,7 +7,8 @@ const VentasDiariasLocalCard = ({
   title = 'Ventas Diarias', 
   subtitle = 'Monto total de lo vendido en lo que va del día en ventas locales',
   ventasDiarias = 0,
-  ventasDiaAnterior = 0
+  ventasDiaAnterior = 0,
+  tendenciaReal = []
 }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
@@ -25,16 +26,13 @@ const VentasDiariasLocalCard = ({
       ? ((ventasDiarias - ventasDiaAnterior) / ventasDiaAnterior) * 100 
       : 0;
 
-    // Generar tendencia diaria simulada (últimas 7 horas)
-    const tendenciaDiaria = [
-      { hora: '8h', ventas: ventasDiarias * 0.05 },
-      { hora: '10h', ventas: ventasDiarias * 0.12 },
-      { hora: '12h', ventas: ventasDiarias * 0.25 },
-      { hora: '14h', ventas: ventasDiarias * 0.18 },
-      { hora: '16h', ventas: ventasDiarias * 0.20 },
-      { hora: '18h', ventas: ventasDiarias * 0.15 },
-      { hora: '20h', ventas: ventasDiarias * 0.05 }
-    ];
+    // Tendencia real de los últimos 7 días, entregada por el backend
+    const tendenciaDiaria = tendenciaReal.length > 0
+      ? tendenciaReal.map(item => ({
+          hora: new Date(`${item.fecha}T00:00:00`).toLocaleDateString('es-CL', { weekday: 'short' }),
+          ventas: item.ventas
+        }))
+      : [];
 
     setData({
       ventasDiarias,
@@ -44,7 +42,7 @@ const VentasDiariasLocalCard = ({
       tendenciaDiaria
     });
     setLoading(false);
-  }, [ventasDiarias, ventasDiaAnterior]);
+  }, [ventasDiarias, ventasDiaAnterior, tendenciaReal]);
 
   const formatValue = (val) => {
     if (val >= 1000000) {

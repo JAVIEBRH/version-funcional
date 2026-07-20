@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Chip, Tooltip } from '@mui/material';
-import { getVentasHistoricas } from '../services/api';
+import { getVentasSemanales } from '../services/api';
+import { glassCardSx } from '../utils/glassCard';
+
+const ACCENT = '#06b6d4';
 
 const VentasSemanalesCard = ({ 
   title = 'Ventas Semanales', 
@@ -24,51 +27,14 @@ const VentasSemanalesCard = ({
   const fetchVentasSemanales = async () => {
     try {
       setLoading(true);
-      const data = await getVentasHistoricas();
-      
-      // Calcular ventas de la semana actual basándose en el mes actual
-      const hoy = new Date();
-      const mesActual = hoy.getMonth();
-      const anioActual = hoy.getFullYear();
-      
-      // Mapear nombres de meses a números
-      const mesesMap = {
-        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-      };
-      
-      // Encontrar ventas del mes actual
-      const ventasMesActual = data.find(item => {
-        const mesNumero = mesesMap[item.name];
-        return mesNumero === mesActual && item.ventas > 0;
-      });
-      
-      // Encontrar ventas del mes anterior
-      const mesAnterior = mesActual === 0 ? 11 : mesActual - 1;
-      const anioAnterior = mesActual === 0 ? anioActual - 1 : anioActual;
-      const ventasMesAnterior = data.find(item => {
-        const mesNumero = mesesMap[item.name];
-        return mesNumero === mesAnterior && item.ventas > 0;
-      });
-      
-      const ventasActual = ventasMesActual?.ventas || 0;
-      const ventasAnterior = ventasMesAnterior?.ventas || 0;
-      
-      // Calcular ventas semanales (aproximadamente 1/4 del mes)
-      const ventasSemanaActual = Math.floor(ventasActual / 4);
-      const ventasSemanaPasada = Math.floor(ventasAnterior / 4);
-      
-      const porcentajeCambio = ventasSemanaPasada > 0 
-        ? ((ventasSemanaActual - ventasSemanaPasada) / ventasSemanaPasada) * 100 
-        : 0;
-      
+      const data = await getVentasSemanales();
       setVentasData({
-        ventas_semana_actual: ventasSemanaActual,
-        ventas_semana_pasada: ventasSemanaPasada,
-        pedidos_semana_actual: Math.floor(ventasSemanaActual / 4000), // Estimación de pedidos
-        pedidos_semana_pasada: Math.floor(ventasSemanaPasada / 4000),
-        porcentaje_cambio: porcentajeCambio,
-        es_positivo: porcentajeCambio >= 0
+        ventas_semana_actual: data.ventas_semana_actual || 0,
+        ventas_semana_pasada: data.ventas_semana_pasada || 0,
+        pedidos_semana_actual: data.pedidos_semana_actual || 0,
+        pedidos_semana_pasada: data.pedidos_semana_pasada || 0,
+        porcentaje_cambio: data.porcentaje_cambio || 0,
+        es_positivo: data.es_positivo !== undefined ? data.es_positivo : true
       });
     } catch (error) {
       console.error('Error obteniendo ventas semanales:', error);
@@ -77,15 +43,9 @@ const VentasSemanalesCard = ({
     }
   };
 
-  // Actualizar datos cuando cambien los props
   useEffect(() => {
-    setVentasData(prev => ({
-      ...prev,
-      ventas_semana_actual: value,
-      porcentaje_cambio: percentageChange,
-      es_positivo: isPositive
-    }));
-  }, [value, percentageChange, isPositive]);
+    fetchVentasSemanales();
+  }, []);
   
   const formatValue = (val) => {
     if (val >= 1000000) {
@@ -132,29 +92,12 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
   return (
     <Box
       sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-        borderRadius: 3,
+        ...glassCardSx(theme, ACCENT),
         padding: 3,
         color: theme.palette.text.primary,
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-          : '0 4px 20px rgba(0, 0, 0, 0.08)',
-        transition: 'all 0.3s ease',
         cursor: 'pointer',
         minHeight: 180,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`,
-        position: 'relative',
-        overflow: 'hidden',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
-            : '0 8px 30px rgba(0, 0, 0, 0.12)'
-        }
+        height: '100%',
       }}
       onClick={fetchVentasSemanales}
     >
@@ -177,7 +120,7 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
             }}
           >
             {title}
-            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: ACCENT }}>🔄</Typography>}
           </Typography>
           <Typography 
             variant="h3" 
@@ -217,12 +160,12 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
           placement="top"
           arrow
         >
-                     <Chip
-             label={`${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio.toFixed(1)}%`}
+          <Chip
+            label={`${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio.toFixed(1)}%`}
             sx={{
-              background: theme.palette.mode === 'dark' 
-                ? 'rgba(147, 112, 219, 0.2)' 
-                : 'rgba(147, 112, 219, 0.1)',
+              background: ventasData.es_positivo
+                ? (theme.palette.mode === 'dark' ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.1)')
+                : (theme.palette.mode === 'dark' ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.1)'),
               color: ventasData.es_positivo ? '#059669' : '#dc2626',
               fontWeight: 600,
               border: `1px solid ${ventasData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
@@ -255,20 +198,20 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
             d={generarPuntosGrafico()}
-            stroke="#9370db"
+            stroke={ACCENT}
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
             d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
-            fill="url(#gradient)"
+            fill="url(#ventas-semanales-grad)"
             opacity="0.3"
           />
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
+            <linearGradient id="ventas-semanales-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.6"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.1"/>
             </linearGradient>
           </defs>
         </svg>

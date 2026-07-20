@@ -1,249 +1,125 @@
-/* Variables CSS para temas mejoradas */
+/* ─────────────────────────────────────────────────────────────────
+   Home.css — Aguas Ancud Dashboard 2026
+   Deep Water Float — page-level overrides & card animations
+───────────────────────────────────────────────────────────────── */
+
 :root {
-  --bg-primary: #fafbfc;
-  --bg-secondary: #ffffff;
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --border-color: #e5e7eb;
-  --shadow-light: rgba(0, 0, 0, 0.06);
-  --shadow-medium: rgba(0, 0, 0, 0.12);
-  --shadow-heavy: rgba(0, 0, 0, 0.18);
-  --scrollbar-track: #f8fafc;
-  --scrollbar-thumb: #d1d5db;
-  --scrollbar-thumb-hover: #9ca3af;
-  --card-gradient: linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%);
-  --card-border: rgba(0,0,0,0.08);
+  --home-card-radius: 18px;
 }
 
-/* Tema oscuro mejorado */
-[data-mui-color-scheme="dark"] {
-  --bg-primary: #0f0f0f;
-  --bg-secondary: #1a1a1a;
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --border-color: #2d2d2d;
-  --shadow-light: rgba(0, 0, 0, 0.25);
-  --shadow-medium: rgba(0, 0, 0, 0.35);
-  --shadow-heavy: rgba(0, 0, 0, 0.45);
-  --scrollbar-track: #1f1f1f;
-  --scrollbar-thumb: #404040;
-  --scrollbar-thumb-hover: #525252;
-  --card-gradient: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
-  --card-border: rgba(255,255,255,0.08);
-}
-
+/* ── Container ───────────────────────────────────────────────────── */
 .home-container {
   min-height: 100vh;
-  background: var(--bg-primary);
   padding: 20px;
   position: relative;
   overflow-x: auto;
   overflow-y: auto;
-  padding-top: 120px; /* Espacio para el header fijo */
+  padding-top: 120px;
 }
 
+/* ── Fixed Header ────────────────────────────────────────────────── */
 .home-header {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
-  background: var(--bg-primary);
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 2px 10px var(--shadow-light);
-  backdrop-filter: blur(10px);
+  padding: 18px 28px;
+  border-bottom: 1px solid rgba(255,255,255,0.065);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: rgba(4,10,20,0.88);
 }
 
+[data-mui-color-scheme="light"] .home-header {
+  background: rgba(237,242,248,0.92);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03), 0 2px 16px rgba(0,0,0,0.04);
+}
+
+[data-mui-color-scheme="dark"] .home-header {
+  background: rgba(4,10,20,0.90);
+  border-bottom: 1px solid rgba(255,255,255,0.065);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.035), 0 4px 24px rgba(0,0,0,0.35);
+}
+
+/* Title — animated gradient */
 .home-header h1 {
   margin: 0;
-  color: var(--text-primary);
-  font-size: 2.5rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #06b6d4 0%, #0d9488 50%, #06b6d4 100%);
+  background-size: 240% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: gradientShift 8s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% center; }
+  50%  { background-position: 100% center; }
+  100% { background-position: 0% center; }
 }
 
 .home-header p {
-  margin: 8px 0 0 0;
-  color: var(--text-secondary);
-  font-size: 1.1rem;
+  margin: 4px 0 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.84rem;
+  font-weight: 500;
+  opacity: 0.48;
+  letter-spacing: 0.005em;
 }
 
-/* Estilos para las cards arrastrables */
-.draggable-card {
-  position: absolute;
-  cursor: grab;
-  user-select: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border-radius: 12px;
-  overflow: hidden;
+/* ── Dashboard card wrapper — entrance animation ─────────────────── */
+.dash-card {
+  animation: dashCardIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.draggable-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px var(--shadow-medium);
+@keyframes dashCardIn {
+  0%   { opacity: 0; transform: translateY(24px) scale(0.965); }
+  65%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.draggable-card:active {
-  cursor: grabbing;
-  transform: scale(1.02);
+/* Stagger for up to 12 cards */
+.dash-card:nth-child(1)  { animation-delay: 0.04s; }
+.dash-card:nth-child(2)  { animation-delay: 0.09s; }
+.dash-card:nth-child(3)  { animation-delay: 0.14s; }
+.dash-card:nth-child(4)  { animation-delay: 0.19s; }
+.dash-card:nth-child(5)  { animation-delay: 0.24s; }
+.dash-card:nth-child(6)  { animation-delay: 0.29s; }
+.dash-card:nth-child(7)  { animation-delay: 0.34s; }
+.dash-card:nth-child(8)  { animation-delay: 0.39s; }
+.dash-card:nth-child(9)  { animation-delay: 0.44s; }
+.dash-card:nth-child(10) { animation-delay: 0.49s; }
+.dash-card:nth-child(11) { animation-delay: 0.54s; }
+.dash-card:nth-child(12) { animation-delay: 0.59s; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+.home-container::-webkit-scrollbar       { width: 5px; height: 5px; }
+.home-container::-webkit-scrollbar-track { background: transparent; }
+.home-container::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.07);
+  border-radius: 99px;
+}
+.home-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.13);
 }
 
-.draggable-card.dragging {
-  z-index: 1000;
-  transform: scale(1.02);
-  box-shadow: 0 12px 40px var(--shadow-heavy);
-}
-
-/* Handle de redimensionamiento */
-.resize-handle {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 20px;
-  height: 20px;
-  cursor: nw-resize;
-  background: var(--shadow-light);
-  border-radius: 0 0 8px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: var(--text-secondary);
-  transition: background 0.2s ease;
-}
-
-.resize-handle:hover {
-  background: var(--shadow-medium);
-}
-
-/* Grid para cards compactos */
-.compact-cards-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 12px;
-  height: 100%;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px var(--shadow-light);
-}
-
-/* Responsive design */
+/* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 1200px) {
-  .home-container {
-    padding: 10px;
-    padding-top: 100px;
-  }
-  
-  .home-header {
-    padding: 15px;
-  }
-  
-  .home-header h1 {
-    font-size: 2rem;
-  }
-  
-  .home-header p {
-    font-size: 1rem;
-  }
+  .home-container { padding: 12px; padding-top: 100px; }
+  .home-header    { padding: 14px 20px; }
+  .home-header h1 { font-size: 1.65rem; }
 }
 
 @media (max-width: 768px) {
-  .home-container {
-    padding-top: 80px;
-  }
-  
-  .home-header {
-    padding: 10px;
-  }
-  
-  .home-header h1 {
-    font-size: 1.5rem;
-  }
-  
-  .home-header p {
-    font-size: 0.9rem;
-  }
+  .home-container { padding-top: 76px; }
+  .home-header    { padding: 10px 16px; }
+  .home-header h1 { font-size: 1.35rem; }
+  .home-header p  { font-size: 0.78rem; }
 }
-
-/* Animaciones mejoradas para las cards */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.02);
-  }
-}
-
-.draggable-card {
-  animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform, opacity;
-}
-
-.draggable-card:hover {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-/* Efectos de hover mejorados */
-.draggable-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform, box-shadow;
-}
-
-.draggable-card:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 12px 40px var(--shadow-medium);
-}
-
-.draggable-card:active {
-  transform: translateY(-2px) scale(1.01);
-  transition: all 0.1s ease;
-}
-
-/* Estilos para el scroll */
-.home-container::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.home-container::-webkit-scrollbar-track {
-  background: var(--scrollbar-track);
-  border-radius: 4px;
-}
-
-.home-container::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 4px;
-}
-
-.home-container::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
-} 

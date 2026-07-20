@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Chip, Tooltip } from '@mui/material';
 import { getVentasHistoricas } from '../services/api';
+import { glassCardSx } from '../utils/glassCard';
+
+const ACCENT = '#ef4444';
 
 const CostosCard = ({ 
   title = 'Costos', 
@@ -51,44 +54,42 @@ const CostosCard = ({
         return mesNumero === mesAnterior && item.ventas > 0;
       });
       
-      // Calcular costos basados en ventas (aproximación)
-      const costosActual = costosMesActual?.ventas ? costosMesActual.ventas * 0.6 : 0; // 60% de ventas como costos
-      const costosAnterior = costosMesAnterior?.ventas ? costosMesAnterior.ventas * 0.6 : 0;
-      
-      const porcentajeCambio = costosAnterior > 0 
-        ? ((costosActual - costosAnterior) / costosAnterior) * 100 
-        : 0;
-      
-      // Generar tendencia mensual basada en datos históricos
+      // Derivar una razón costo/venta real a partir del costo real del mes (prop "value")
+      // en vez de asumir un 60% fijo sin base en los datos.
+      const ventasActualMes = costosMesActual?.ventas || 0;
+      const razonCostoVenta = ventasActualMes > 0 && value > 0 ? value / ventasActualMes : 0.6;
+      const costosAnterior = costosMesAnterior?.ventas ? costosMesAnterior.ventas * razonCostoVenta : 0;
+
+      // Generar tendencia mensual basada en datos históricos reales de ventas
       const tendenciaMensual = [];
       const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-      
+
       // Obtener los últimos 6 meses de datos
       for (let i = 5; i >= 0; i--) {
         const mesIndex = (mesActual - i + 12) % 12;
         const anio = mesActual - i < 0 ? anioActual - 1 : anioActual;
-        
+
         const ventasMes = data.find(item => {
           const mesNumero = mesesMap[item.name];
           return mesNumero === mesIndex && item.ventas > 0;
         });
-        
-        const costosMes = ventasMes?.ventas ? ventasMes.ventas * 0.6 : 0;
-        
+
+        const costosMes = ventasMes?.ventas ? ventasMes.ventas * razonCostoVenta : 0;
+
         tendenciaMensual.push({
           mes: mesesNombres[mesIndex],
           costos: costosMes
         });
       }
-      
-      setCostosData({
-        costos_mes_actual: costosActual,
+
+      // El valor y porcentaje reales vienen del backend vía props (/kpis);
+      // aquí solo enriquecemos con el mes anterior y la tendencia para el gráfico.
+      setCostosData(prev => ({
+        ...prev,
         costos_mes_anterior: costosAnterior,
-        porcentaje_cambio: porcentajeCambio,
-        es_positivo: porcentajeCambio <= 0, // Para costos, negativo es positivo
         tendencia_mensual: tendenciaMensual,
         fecha_analisis: hoy.toISOString()
-      });
+      }));
     } catch (error) {
       console.error('Error obteniendo costos mensuales:', error);
     } finally {
@@ -96,21 +97,24 @@ const CostosCard = ({
     }
   };
 
-  // Cargar datos al montar el componente
+  // Actualizar cuando cambie el prop del backend
+  useEffect(() => {
+    if (value > 0) {
+      setCostosData(prev => ({
+        ...prev,
+        costos_mes_actual: value,
+        porcentaje_cambio: percentageChange,
+        es_positivo: isPositive
+      }));
+    }
+  }, [value, percentageChange, isPositive]);
+
+  // Cargar tendencia histórica real al montar
   useEffect(() => {
     fetchCostosMensuales();
   }, []);
 
-  // Actualizar datos cuando cambien los props
-  useEffect(() => {
-    setCostosData(prev => ({
-      ...prev,
-      costos_mes_actual: value,
-      porcentaje_cambio: percentageChange,
-      es_positivo: isPositive
-    }));
-  }, [value, percentageChange, isPositive]);
-  
+
   const formatValue = (val) => {
     if (val >= 1000000) {
       return `$${(val / 1000000).toFixed(1)}M`;
@@ -140,35 +144,18 @@ const CostosCard = ({
   const tooltipText = `Costos mensuales:
 Mes actual: ${formatValue(costosData.costos_mes_actual)}
 Mes anterior: ${formatValue(costosData.costos_mes_anterior)}
-Cambio: ${costosData.es_positivo ? '+' : ''}${costosData.porcentaje_cambio.toFixed(1)}%
+Cambio: ${costosData.porcentaje_cambio > 0 ? '+' : ''}${costosData.porcentaje_cambio.toFixed(1)}%
 Gráfico: Últimos 6 meses`;
 
   return (
     <Box
       sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-        borderRadius: 3,
+        ...glassCardSx(theme, ACCENT),
         padding: 3,
         color: theme.palette.text.primary,
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-          : '0 4px 20px rgba(0, 0, 0, 0.08)',
-        transition: 'all 0.3s ease',
         cursor: 'pointer',
         minHeight: 180,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`,
-        position: 'relative',
-        overflow: 'hidden',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
-            : '0 8px 30px rgba(0, 0, 0, 0.12)'
-        }
+        height: '100%',
       }}
       onClick={fetchCostosMensuales}
     >
@@ -191,7 +178,7 @@ Gráfico: Últimos 6 meses`;
             }}
           >
             {title}
-            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: ACCENT }}>🔄</Typography>}
           </Typography>
           <Typography 
             variant="h3" 
@@ -232,11 +219,11 @@ Gráfico: Últimos 6 meses`;
           arrow
         >
           <Chip
-            label={`${costosData.es_positivo ? '+' : ''}${costosData.porcentaje_cambio.toFixed(1)}%`}
+            label={`${costosData.porcentaje_cambio > 0 ? '+' : ''}${costosData.porcentaje_cambio.toFixed(1)}%`}
             sx={{
-              background: theme.palette.mode === 'dark' 
-                ? 'rgba(147, 112, 219, 0.2)' 
-                : 'rgba(147, 112, 219, 0.1)',
+              background: costosData.es_positivo
+                ? (theme.palette.mode === 'dark' ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.1)')
+                : (theme.palette.mode === 'dark' ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.1)'),
               color: costosData.es_positivo ? '#059669' : '#dc2626',
               fontWeight: 600,
               border: `1px solid ${costosData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
@@ -269,20 +256,20 @@ Gráfico: Últimos 6 meses`;
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
             d={generarPuntosGrafico()}
-            stroke="#9370db"
+            stroke={ACCENT}
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
             d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
-            fill="url(#gradient)"
+            fill="url(#costos-grad)"
             opacity="0.3"
           />
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
+            <linearGradient id="costos-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.6"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.1"/>
             </linearGradient>
           </defs>
         </svg>

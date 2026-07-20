@@ -6,7 +6,8 @@ const VentasMensualesLocalCard = ({
   title = 'Ventas Mensuales', 
   subtitle = 'Monto total vendido en el mes actual en ventas locales',
   ventasMensuales = 0,
-  ventasMesAnterior = 0
+  ventasMesAnterior = 0,
+  tendenciaReal = []
 }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
@@ -24,16 +25,10 @@ const VentasMensualesLocalCard = ({
       ? ((ventasMensuales - ventasMesAnterior) / ventasMesAnterior) * 100 
       : 0;
 
-    // Generar tendencia mensual simulada (últimos 6 meses)
-    const tendenciaMensual = [
-      { mes: 'Ene', ventas: ventasMensuales * 0.8 },
-      { mes: 'Feb', ventas: ventasMensuales * 0.85 },
-      { mes: 'Mar', ventas: ventasMensuales * 0.9 },
-      { mes: 'Abr', ventas: ventasMensuales * 0.92 },
-      { mes: 'May', ventas: ventasMensuales * 0.95 },
-      { mes: 'Jun', ventas: ventasMensuales * 0.98 },
-      { mes: 'Jul', ventas: ventasMensuales }
-    ];
+    // Tendencia real de los últimos meses, entregada por el backend
+    const tendenciaMensual = tendenciaReal.length > 0
+      ? tendenciaReal.map(item => ({ mes: item.mes, ventas: item.ventas }))
+      : [];
 
     setData({
       ventasMensuales,
@@ -43,7 +38,7 @@ const VentasMensualesLocalCard = ({
       tendenciaMensual
     });
     setLoading(false);
-  }, [ventasMensuales, ventasMesAnterior]);
+  }, [ventasMensuales, ventasMesAnterior, tendenciaReal]);
 
   const formatValue = (val) => {
     if (val >= 1000000) {

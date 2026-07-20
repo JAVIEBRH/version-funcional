@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Chip, Tooltip } from '@mui/material';
 import { getPedidos } from '../services/api';
+import { glassCardSx } from '../utils/glassCard';
+
+const ACCENT = '#0ea5e9';
 
 const BidonesCard = ({ 
   title = 'Bidones Vendidos', 
@@ -43,11 +46,15 @@ const BidonesCard = ({
       const mesActual = hoy.getMonth();
       const anioActual = hoy.getFullYear();
       
-      // Función para calcular bidones basándose en el precio
-      const calcularBidones = (precio) => {
-        const precioNum = parseInt(precio) || 0;
-        // Asumiendo que cada bidón cuesta aproximadamente $4000
-        return Math.max(1, Math.floor(precioNum / 4000));
+      // Función para calcular bidones: usa la cantidad real del pedido (ordenpedido),
+      // igual que el backend; solo si falta ese dato se aproxima por precio.
+      const calcularBidones = (pedido) => {
+        if (pedido.ordenpedido !== undefined && pedido.ordenpedido !== null) {
+          const cantidad = parseInt(String(pedido.ordenpedido).replace(/[^\d]/g, ''), 10);
+          if (!isNaN(cantidad) && cantidad > 0) return cantidad;
+        }
+        const precioNum = parseInt(pedido.precio) || 0;
+        return Math.max(1, Math.floor(precioNum / 2000));
       };
       
       // Función para parsear fecha
@@ -59,21 +66,12 @@ const BidonesCard = ({
         return null;
       };
       
-      const bidonesMesActual = pedidos.filter(pedido => {
-        const fechaPedido = parsearFecha(pedido.fecha);
-        return fechaPedido && fechaPedido.getMonth() === mesActual && fechaPedido.getFullYear() === anioActual;
-      }).reduce((total, pedido) => total + calcularBidones(pedido.precio), 0);
-      
       const bidonesMesAnterior = pedidos.filter(pedido => {
         const fechaPedido = parsearFecha(pedido.fecha);
         const mesAnterior = mesActual === 0 ? 11 : mesActual - 1;
         const anioAnterior = mesActual === 0 ? anioActual - 1 : anioActual;
         return fechaPedido && fechaPedido.getMonth() === mesAnterior && fechaPedido.getFullYear() === anioAnterior;
-      }).reduce((total, pedido) => total + calcularBidones(pedido.precio), 0);
-      
-      const porcentajeCambio = bidonesMesAnterior > 0 
-        ? ((bidonesMesActual - bidonesMesAnterior) / bidonesMesAnterior) * 100 
-        : 0;
+      }).reduce((total, pedido) => total + calcularBidones(pedido), 0);
       
       // Generar tendencia diaria del mes actual
       const tendenciaDiaria = [];
@@ -85,7 +83,7 @@ const BidonesCard = ({
           return fechaPedido && fechaPedido.getDate() === dia && 
                  fechaPedido.getMonth() === mesActual && 
                  fechaPedido.getFullYear() === anioActual;
-        }).reduce((total, pedido) => total + calcularBidones(pedido.precio), 0);
+        }).reduce((total, pedido) => total + calcularBidones(pedido), 0);
         
         tendenciaDiaria.push({
           dia: dia,
@@ -93,15 +91,14 @@ const BidonesCard = ({
         });
       }
       
-      setBidonesData({
-        total_bidones: bidonesMesActual,
-        bidones_mes_actual: bidonesMesActual,
+      // El total y porcentaje reales vienen del backend vía props (/kpis);
+      // aquí solo enriquecemos con el mes anterior y la tendencia diaria para el gráfico.
+      setBidonesData(prev => ({
+        ...prev,
         bidones_mes_anterior: bidonesMesAnterior,
-        porcentaje_cambio: porcentajeCambio,
-        es_positivo: porcentajeCambio >= 0,
         tendencia_diaria: tendenciaDiaria,
         fecha_analisis: hoy.toISOString()
-      });
+      }));
     } catch (error) {
       console.error('Error obteniendo datos de bidones:', error);
     } finally {
@@ -142,29 +139,12 @@ Cambio: ${bidonesData.es_positivo ? '+' : ''}${bidonesData.porcentaje_cambio.toF
   return (
     <Box
       sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-        borderRadius: 3,
+        ...glassCardSx(theme, ACCENT),
         padding: 3,
         color: theme.palette.text.primary,
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-          : '0 4px 20px rgba(0, 0, 0, 0.08)',
-        transition: 'all 0.3s ease',
         cursor: 'pointer',
         minHeight: 180,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`,
-        position: 'relative',
-        overflow: 'hidden',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
-            : '0 8px 30px rgba(0, 0, 0, 0.12)'
-        }
+        height: '100%',
       }}
       onClick={fetchBidonesData}
     >
@@ -187,7 +167,7 @@ Cambio: ${bidonesData.es_positivo ? '+' : ''}${bidonesData.porcentaje_cambio.toF
             }}
           >
             {title}
-            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: ACCENT }}>🔄</Typography>}
           </Typography>
           <Typography 
             variant="h3" 
@@ -230,9 +210,9 @@ Cambio: ${bidonesData.es_positivo ? '+' : ''}${bidonesData.porcentaje_cambio.toF
           <Chip
             label={`${bidonesData.es_positivo ? '+' : ''}${bidonesData.porcentaje_cambio.toFixed(1)}%`}
             sx={{
-              background: theme.palette.mode === 'dark' 
-                ? 'rgba(147, 112, 219, 0.2)' 
-                : 'rgba(147, 112, 219, 0.1)',
+              background: bidonesData.es_positivo
+                ? (theme.palette.mode === 'dark' ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.1)')
+                : (theme.palette.mode === 'dark' ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.1)'),
               color: bidonesData.es_positivo ? '#059669' : '#dc2626',
               fontWeight: 600,
               border: `1px solid ${bidonesData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
@@ -265,20 +245,20 @@ Cambio: ${bidonesData.es_positivo ? '+' : ''}${bidonesData.porcentaje_cambio.toF
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
             d={generarPuntosGrafico()}
-            stroke="#9370db"
+            stroke={ACCENT}
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
             d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
-            fill="url(#gradient)"
+            fill="url(#bidones-grad)"
             opacity="0.3"
           />
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
+            <linearGradient id="bidones-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.6"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.1"/>
             </linearGradient>
           </defs>
         </svg>

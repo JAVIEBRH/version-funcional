@@ -111,25 +111,19 @@ const KpiMetaCard = ({
   if (loading) {
     return (
       <Box sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
-          : 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%)',
-        borderRadius: 4,
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        background: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.90)',
+        borderRadius: '18px',
+        border: theme.palette.mode === 'dark' ? '1px solid rgba(255,255,255,0.085)' : '1px solid rgba(0,0,0,0.07)',
+        backdropFilter: 'blur(20px)',
         padding: 3,
-        minWidth: 'auto',
-        maxWidth: 'none',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(255,255,255,0.08)' 
-          : 'rgba(0,0,0,0.08)'}`,
-        minHeight: 200
+        minHeight: 200,
       }}>
-        <Typography variant="body2" sx={{ color: '#9370db' }}>
-          Cargando meta de ventas...
+        <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: '"DM Sans", system-ui, sans-serif' }}>
+          Cargando...
         </Typography>
       </Box>
     );
@@ -137,102 +131,53 @@ const KpiMetaCard = ({
   
   return (
     <Box sx={{
-      background: theme.palette.mode === 'dark' 
-        ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
-        : 'linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.6) 100%)',
-      borderRadius: 4,
-      boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+      position: 'relative',
+      overflow: 'hidden',
+      background: theme.palette.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(255,255,255,0.90)',
+      borderRadius: '18px',
       padding: 3,
-      minWidth: 'auto',
-      maxWidth: 'none',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-start',
-      border: `1px solid ${theme.palette.mode === 'dark' 
-        ? 'rgba(255,255,255,0.08)' 
-        : 'rgba(0,0,0,0.08)'}`,
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      position: 'relative',
-      overflow: 'hidden',
-      backdropFilter: 'blur(10px)',
+      border: theme.palette.mode === 'dark'
+        ? '1px solid rgba(255,255,255,0.085)'
+        : '1px solid rgba(0,0,0,0.07)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: theme.palette.mode === 'dark'
+        ? '0 1px 3px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.38), 0 12px 40px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)'
+        : '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.08)',
+      transition: 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.32s ease',
+      '&:hover': {
+        transform: 'translateY(-6px)',
+        boxShadow: theme.palette.mode === 'dark'
+          ? `0 2px 4px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.45), 0 20px 60px rgba(6,182,212,0.1), 0 0 0 1px rgba(6,182,212,0.18), inset 0 1px 0 rgba(255,255,255,0.08)`
+          : `0 4px 12px rgba(0,0,0,0.08), 0 12px 40px rgba(8,145,178,0.14), 0 0 0 1px rgba(8,145,178,0.15)`,
+      },
+      /* Subtle progress-color accent on top border */
       '&::before': {
         content: '""',
         position: 'absolute',
-        top: '-50%',
-        left: '-50%',
-        width: '200%',
-        height: '200%',
-        background: metaData.porcentajeCumplimiento < 60 ? 
-          'linear-gradient(45deg, transparent, rgba(239, 68, 68, 0.6), transparent, rgba(239, 68, 68, 0.6), transparent)' :
-          metaData.porcentajeCumplimiento < 80 ? 
-          'linear-gradient(45deg, transparent, rgba(245, 158, 11, 0.6), transparent, rgba(245, 158, 11, 0.6), transparent)' :
-          'linear-gradient(45deg, transparent, rgba(34, 197, 94, 0.6), transparent, rgba(34, 197, 94, 0.6), transparent)',
-        animation: metaData.porcentajeCumplimiento < 60 ? 'glowWaveRed 5s ease-in-out infinite' :
-                   metaData.porcentajeCumplimiento < 80 ? 'glowWaveYellow 5s ease-in-out infinite' :
-                   'glowWaveGreen 5s ease-in-out infinite',
-        zIndex: 0
+        top: 0, left: '15%', right: '15%',
+        height: '1px',
+        background: `linear-gradient(90deg, transparent, ${progressColor}55, transparent)`,
       },
-      '&::after': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        borderRadius: 4,
-        boxShadow: metaData.porcentajeCumplimiento < 60 ? 
-          '0 0 30px rgba(239, 68, 68, 0.8), 0 0 60px rgba(239, 68, 68, 0.6)' :
-          metaData.porcentajeCumplimiento < 80 ? 
-          '0 0 30px rgba(245, 158, 11, 0.8), 0 0 60px rgba(245, 158, 11, 0.6)' :
-          '0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.6)',
-        animation: metaData.porcentajeCumplimiento < 60 ? 'glowPulseRed 4s ease-in-out infinite' :
-                   metaData.porcentajeCumplimiento < 80 ? 'glowPulseYellow 4s ease-in-out infinite' :
-                   'glowPulseGreen 4s ease-in-out infinite',
-        zIndex: 1
-      },
-      '@keyframes glowWaveRed': {
-        '0%': { transform: 'translateX(-100%) translateY(-100%) rotate(0deg)' },
-        '50%': { transform: 'translateX(100%) translateY(100%) rotate(180deg)' },
-        '100%': { transform: 'translateX(-100%) translateY(-100%) rotate(360deg)' }
-      },
-      '@keyframes glowWaveYellow': {
-        '0%': { transform: 'translateX(-100%) translateY(-100%) rotate(0deg)' },
-        '50%': { transform: 'translateX(100%) translateY(100%) rotate(180deg)' },
-        '100%': { transform: 'translateX(-100%) translateY(-100%) rotate(360deg)' }
-      },
-      '@keyframes glowWaveGreen': {
-        '0%': { transform: 'translateX(-100%) translateY(-100%) rotate(0deg)' },
-        '50%': { transform: 'translateX(100%) translateY(100%) rotate(180deg)' },
-        '100%': { transform: 'translateX(-100%) translateY(-100%) rotate(360deg)' }
-      },
-      '@keyframes glowPulseRed': {
-        '0%, 100%': { opacity: 0.7 },
-        '50%': { opacity: 1 }
-      },
-      '@keyframes glowPulseYellow': {
-        '0%, 100%': { opacity: 0.7 },
-        '50%': { opacity: 1 }
-      },
-      '@keyframes glowPulseGreen': {
-        '0%, 100%': { opacity: 0.7 },
-        '50%': { opacity: 1 }
-      }
     }}>
-      <div style={{ 
-        fontSize: '1.125rem', 
-        fontWeight: 700, 
-        color: theme.palette.text.primary, 
-        marginBottom: 16, 
+      <div style={{
+        fontSize: '0.72rem',
+        fontWeight: 700,
+        color: theme.palette.text.secondary,
+        marginBottom: 16,
         textAlign: 'center',
-        fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-        letterSpacing: '0.025em',
+        fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+        letterSpacing: '0.1em',
         textTransform: 'uppercase',
         WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility',
         position: 'relative',
-        zIndex: 2
+        zIndex: 2,
       }}>
         {title}
       </div>

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Typography, Box } from '@mui/material';
 import { getPedidosPorHorario } from '../services/api';
+import { glassCardSx, GLASS_FONT_HEADING } from '../utils/glassCard';
+
+const ACCENT = '#3b82f6';
 
 const PedidosPorBloqueDonut = ({ 
   pedidosManana = 0, 
@@ -60,49 +63,34 @@ const PedidosPorBloqueDonut = ({
   return (
     <Box
       sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-        borderRadius: 3,
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-          : '0 4px 20px rgba(0, 0, 0, 0.08)',
+        ...glassCardSx(theme, ACCENT),
         padding: 3,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`,
-        transition: 'all 0.3s ease',
-        position: 'relative',
-        overflow: 'hidden',
         cursor: 'pointer',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
-            : '0 8px 30px rgba(0, 0, 0, 0.12)'
-        }
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
       }}
       onClick={fetchPedidosPorHorario}
     >
-      <Typography 
-        variant="h6" 
-        sx={{ 
-          fontWeight: 700, 
-          color: theme.palette.text.primary, 
-          mb: 2, 
+      <Typography
+        sx={{
+          fontWeight: 700,
+          color: theme.palette.text.secondary,
+          mb: 2,
           textAlign: 'center',
           textTransform: 'uppercase',
-          letterSpacing: '0.025em',
-          fontSize: '1rem'
+          letterSpacing: '0.1em',
+          fontSize: '0.7rem',
+          fontFamily: GLASS_FONT_HEADING,
         }}
       >
         {title}
-        {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+        {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: ACCENT }}>🔄</Typography>}
       </Typography>
-      
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
+
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'center',
         alignItems: 'center',
         mb: 2
       }}>
@@ -114,7 +102,7 @@ const PedidosPorBloqueDonut = ({
               cy="70"
               r={radius}
               fill="none"
-              stroke="#e5e7eb"
+              stroke={theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
               strokeWidth={strokeWidth}
             />
             

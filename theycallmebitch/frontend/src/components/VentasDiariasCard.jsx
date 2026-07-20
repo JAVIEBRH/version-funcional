@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Chip, Tooltip } from '@mui/material';
 import { getVentasDiarias } from '../services/api';
+import { glassCardSx } from '../utils/glassCard';
+
+const ACCENT = '#06b6d4';
 
 const VentasDiariasCard = ({ 
   title = 'Ventas Diarias', 
@@ -87,29 +90,12 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
   return (
     <Box
       sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-        borderRadius: 3,
+        ...glassCardSx(theme, ACCENT),
         padding: 3,
         color: theme.palette.text.primary,
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-          : '0 4px 20px rgba(0, 0, 0, 0.08)',
-        transition: 'all 0.3s ease',
         cursor: 'pointer',
         minHeight: 180,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`,
-        position: 'relative',
-        overflow: 'hidden',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
-            : '0 8px 30px rgba(0, 0, 0, 0.12)'
-        }
+        height: '100%',
       }}
       onClick={fetchVentasDiarias}
     >
@@ -132,7 +118,7 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
             }}
           >
             {title}
-            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: ACCENT }}>🔄</Typography>}
           </Typography>
           <Typography 
             variant="h3" 
@@ -175,9 +161,9 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
           <Chip
             label={`${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`}
             sx={{
-              background: theme.palette.mode === 'dark' 
-                ? 'rgba(147, 112, 219, 0.2)' 
-                : 'rgba(147, 112, 219, 0.1)',
+              background: ventasData.es_positivo
+                ? (theme.palette.mode === 'dark' ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.1)')
+                : (theme.palette.mode === 'dark' ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.1)'),
               color: ventasData.es_positivo ? '#059669' : '#dc2626',
               fontWeight: 600,
               border: `1px solid ${ventasData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
@@ -210,20 +196,20 @@ Cambio: ${ventasData.es_positivo ? '+' : ''}${ventasData.porcentaje_cambio}%`;
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
             d={generarPuntosGrafico()}
-            stroke="#9370db"
+            stroke={ACCENT}
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
             d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
-            fill="url(#gradient)"
+            fill="url(#ventas-diarias-grad)"
             opacity="0.3"
           />
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
+            <linearGradient id="ventas-diarias-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.6"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.1"/>
             </linearGradient>
           </defs>
         </svg>

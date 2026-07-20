@@ -1,170 +1,146 @@
-/* Global Styles */
-* {
-  box-sizing: border-box;
-}
+/* ─────────────────────────────────────────────────────────────────
+   App.css — Aguas Ancud Dashboard 2026
+   Deep Water Float — global animation utilities
+───────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Plus Jakarta Sans', 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease-in-out;
+  transition: background-color 0.4s ease;
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-/* Dark mode scrollbar */
-[data-mui-color-scheme="dark"] ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-[data-mui-color-scheme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* Animations */
+/* ── Core Keyframes ────────────────────────────────────────────── */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.93); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
-/* Animation classes */
-.fade-in {
-  animation: fadeIn 0.5s ease-out;
+@keyframes floatCard {
+  0%  { opacity: 0; transform: translateY(22px) scale(0.97); }
+  70% { opacity: 1; }
+  100%{ opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.slide-in {
-  animation: slideIn 0.5s ease-out;
-}
-
-.scale-in {
-  animation: scaleIn 0.3s ease-out;
-}
-
-/* Hover effects */
-.hover-lift {
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
-
-/* Focus styles */
-*:focus {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
-
-/* Selection styles */
-::selection {
-  background-color: #3b82f6;
-  color: white;
-}
-
-/* Loading animations */
+/* Shimmer — light & dark aware */
 @keyframes shimmer {
-  0% {
-    background-position: -200px 0;
-  }
-  100% {
-    background-position: calc(200px + 100%) 0;
-  }
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
 }
 
+/* Pulsing glow ring */
+@keyframes glowRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(6,182,212,0.35); }
+  50%       { box-shadow: 0 0 0 8px rgba(6,182,212,0); }
+}
+
+/* Status dot */
+@keyframes statusDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(16,185,129,0); }
+}
+
+/* Rotate */
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Gradient shift for title */
+@keyframes gradientShift {
+  0%   { background-position: 0% center; }
+  50%  { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+
+/* ── Animation Classes ─────────────────────────────────────────── */
+.fade-in   { animation: fadeIn   0.45s cubic-bezier(0.4,0,0.2,1)    both; }
+.slide-in  { animation: slideIn  0.38s cubic-bezier(0.4,0,0.2,1)    both; }
+.scale-in  { animation: scaleIn  0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+.float-in  { animation: floatCard 0.55s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+/* card-float-in — used by KpiCard and Home dash-card wrappers */
+.card-float-in {
+  animation: floatCard 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+
+/* dash-card stagger delays for Home.jsx grid */
+.dash-card { animation: floatCard 0.55s cubic-bezier(0.34,1.56,0.64,1) both; }
+.dash-card:nth-child(1)  { animation-delay: 0.04s; }
+.dash-card:nth-child(2)  { animation-delay: 0.10s; }
+.dash-card:nth-child(3)  { animation-delay: 0.16s; }
+.dash-card:nth-child(4)  { animation-delay: 0.22s; }
+.dash-card:nth-child(5)  { animation-delay: 0.28s; }
+.dash-card:nth-child(6)  { animation-delay: 0.34s; }
+.dash-card:nth-child(7)  { animation-delay: 0.40s; }
+.dash-card:nth-child(8)  { animation-delay: 0.46s; }
+.dash-card:nth-child(9)  { animation-delay: 0.52s; }
+.dash-card:nth-child(10) { animation-delay: 0.58s; }
+
+/* Hover lift — use on container, not the card itself */
+.hover-lift {
+  transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+}
+
+/* ── Shimmer Skeleton ──────────────────────────────────────────── */
 .shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200px 100%;
-  animation: shimmer 1.5s infinite;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0)    0%,
+    rgba(255,255,255,0.11) 40%,
+    rgba(255,255,255,0.22) 50%,
+    rgba(255,255,255,0.11) 60%,
+    rgba(255,255,255,0)   100%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.8s infinite;
 }
 
-/* Responsive utilities */
-@media (max-width: 768px) {
-  .mobile-hidden {
-    display: none !important;
-  }
+/* ── Focus — accessible outline ───────────────────────────────── */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid #06b6d4;
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
-@media (min-width: 769px) {
-  .desktop-hidden {
-    display: none !important;
-  }
+/* ── Text Selection ────────────────────────────────────────────── */
+::selection {
+  background-color: rgba(6,182,212,0.22);
+  color: inherit;
 }
 
-/* Print styles */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-}
+/* ── Responsive Utilities ──────────────────────────────────────── */
+@media (max-width: 768px)  { .mobile-hidden  { display: none !important; } }
+@media (min-width: 769px)  { .desktop-hidden { display: none !important; } }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  * {
-    border-color: currentColor !important;
-  }
-}
+/* ── Print ─────────────────────────────────────────────────────── */
+@media print { .no-print { display: none !important; } }
 
-/* Reduced motion support */
+/* ── Reduced Motion ────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-} 
+}
+
+/* ── High Contrast ─────────────────────────────────────────────── */
+@media (prefers-contrast: high) { * { border-color: currentColor !important; } }

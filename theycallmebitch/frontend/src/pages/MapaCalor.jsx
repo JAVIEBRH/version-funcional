@@ -1,378 +1,309 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
-import { Box, Typography, FormControl, Select, MenuItem, Card, CardContent, useTheme } from '@mui/material';
+import { Box, Typography, FormControl, Select, MenuItem, useTheme, CircularProgress } from '@mui/material';
+import PlaceIcon from '@mui/icons-material/Place';
+import PaidIcon from '@mui/icons-material/Paid';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import 'leaflet/dist/leaflet.css';
+import { getHeatmap } from '../services/api';
 import './MapaCalor.css';
 
-// Componente para manejar el zoom dinámicamente
+const CYAN = '#06b6d4';
+
+// Única fuente de verdad para los niveles de concentración: color, radio base
+// y etiqueta. Antes esta escala vivía triplicada (color, radio y leyenda cada
+// uno con su propia copia de los mismos umbrales de $).
+const NIVELES = [
+  { hasta: 3000, color: '#10b981', radio: 1, etiqueta: 'Baja' },
+  { hasta: 6000, color: '#a3e635', radio: 1.5, etiqueta: 'Baja-media' },
+  { hasta: 10000, color: '#facc15', radio: 2, etiqueta: 'Media' },
+  { hasta: 15000, color: '#fb923c', radio: 2.5, etiqueta: 'Media-alta' },
+  { hasta: Infinity, color: '#ef4444', radio: 3, etiqueta: 'Alta' },
+];
+
+function nivelDe(monto) {
+  const amount = parseInt(monto) || 0;
+  return NIVELES.find(n => amount <= n.hasta) || NIVELES[NIVELES.length - 1];
+}
+
+const formatoCLP = (val) => `$${(parseInt(val) || 0).toLocaleString('es-CL')}`;
+
+// Círculos del mapa: su tamaño se ajusta al nivel de zoom para que a cualquier
+// escala se sigan viendo como puntos distinguibles, no manchas o puntos invisibles.
 function ZoomAwareCircles({ mapData }) {
   const map = useMap();
   const [zoom, setZoom] = useState(map.getZoom());
 
   useEffect(() => {
-    const handleZoom = () => {
-      setZoom(map.getZoom());
-    };
-
+    const handleZoom = () => setZoom(map.getZoom());
     map.on('zoomend', handleZoom);
-    return () => {
-      map.off('zoomend', handleZoom);
-    };
+    return () => map.off('zoomend', handleZoom);
   }, [map]);
 
-  // Función para obtener color basado en concentración
-  const getColorByConcentration = (totalSpent) => {
-    const amount = parseInt(totalSpent) || 0;
-    
-    if (amount > 15000) return '#ff0000';      // Rojo - alta concentración
-    if (amount > 10000) return '#ff6600';      // Naranja - media-alta
-    if (amount > 6000) return '#ffcc00';       // Amarillo - media
-    if (amount > 3000) return '#99cc00';       // Verde-amarillo - baja-media
-    return '#00cc00';                          // Verde - baja concentración
-  };
-
-  // Función para obtener radio basado en concentración Y ZOOM - LÓGICA CORREGIDA
-  const getRadiusByConcentrationAndZoom = (totalSpent) => {
-    const amount = parseInt(totalSpent) || 0;
-    
-    // Radio base según concentración
-    let baseRadius;
-    if (amount > 15000) baseRadius = 3;   // Alta concentración
-    else if (amount > 10000) baseRadius = 2.5; // Media-alta
-    else if (amount > 6000) baseRadius = 2;    // Media
-    else if (amount > 3000) baseRadius = 1.5;  // Baja-media
-    else baseRadius = 1;                       // Baja concentración
-    
-    // Ajustar según el zoom - LÓGICA INVERTIDA
-    // Zoom alto (acercado) = círculos más pequeños
-    // Zoom bajo (alejado) = círculos más grandes
-    const zoomFactor = Math.max(0.3, Math.min(2, (18 - zoom) / 6)); // Factor entre 0.3 y 2
-    return baseRadius * zoomFactor;
-  };
+  const zoomFactor = Math.max(0.3, Math.min(2, (18 - zoom) / 6));
 
   return mapData.map((point, index) => {
-    const totalSpent = parseInt(point.total_spent) || 0;
-    const radius = getRadiusByConcentrationAndZoom(totalSpent);
-    
+    const nivel = nivelDe(point.total_spent);
+
     return (
       <Circle
         key={index}
         center={[point.lat, point.lng]}
-        radius={radius * 50} // Convertir a metros
+        radius={nivel.radio * zoomFactor * 50}
         pathOptions={{
-          color: getColorByConcentration(totalSpent),
-          fillColor: getColorByConcentration(totalSpent),
+          color: nivel.color,
+          fillColor: nivel.color,
           fillOpacity: 0.7,
-          weight: 0.5
+          weight: 1,
         }}
       >
-        <Popup>
-          <div>
-            <h3>Ubicación de Pedido</h3>
-            <p><strong>Dirección:</strong> {point.address}</p>
-            <p><strong>Cliente:</strong> {point.user}</p>
-            <p><strong>Teléfono:</strong> {point.phone}</p>
-            <p><strong>Total gastado:</strong> ${parseInt(point.total_spent).toLocaleString('es-CL')}</p>
-            <p><strong>Ticket promedio:</strong> ${parseInt(point.ticket_promedio || 0).toLocaleString('es-CL')}</p>
-            <p><strong>Último pedido:</strong> {point.fecha_ultimo_pedido || 'N/A'}</p>
-            <p><strong>Concentración:</strong> {
-              parseInt(point.total_spent) > 15000 ? 'Alta' :
-              parseInt(point.total_spent) > 10000 ? 'Media-Alta' :
-              parseInt(point.total_spent) > 6000 ? 'Media' :
-              parseInt(point.total_spent) > 3000 ? 'Baja-Media' : 'Baja'
-            }</p>
-          </div>
+        <Popup className="heatmap-popup" closeButton={false} minWidth={220}>
+          <Box sx={{ minWidth: 200 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: nivel.color, flexShrink: 0 }} />
+              <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(226,232,240,0.6)' }}>
+                Concentración {nivel.etiqueta}
+              </Typography>
+            </Box>
+            <Typography sx={{ fontSize: '1.4rem', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.1, mb: 0.5 }}>
+              {formatoCLP(point.total_spent)}
+            </Typography>
+            <Typography sx={{ fontSize: '0.78rem', color: 'rgba(226,232,240,0.75)', mb: 1.5, lineHeight: 1.4 }}>
+              {point.address}
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, pt: 1, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <Row label="Cliente" value={point.user || 'Sin datos'} />
+              <Row label="Teléfono" value={point.phone || 'Sin datos'} />
+              <Row label="Ticket promedio" value={formatoCLP(point.ticket_promedio)} />
+              <Row label="Último pedido" value={point.fecha_ultimo_pedido || 'N/A'} />
+            </Box>
+          </Box>
         </Popup>
       </Circle>
     );
   });
 }
 
+function Row({ label, value }) {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+      <Typography sx={{ fontSize: '0.72rem', color: 'rgba(226,232,240,0.5)' }}>{label}</Typography>
+      <Typography sx={{ fontSize: '0.72rem', color: 'rgba(226,232,240,0.85)', textAlign: 'right', fontWeight: 600 }}>{value}</Typography>
+    </Box>
+  );
+}
+
+// Tarjeta compacta de resumen (mismo lenguaje visual que las mini-KPI del Home).
+function StatCard({ icon: Icon, label, value }) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  return (
+    <Box sx={{
+      flex: '1 1 160px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.5,
+      padding: '14px 16px',
+      borderRadius: '14px',
+      background: isDark ? 'rgba(255,255,255,0.036)' : 'rgba(255,255,255,0.9)',
+      border: `1px solid ${isDark ? 'rgba(255,255,255,0.085)' : 'rgba(0,0,0,0.07)'}`,
+      backdropFilter: 'blur(18px)',
+    }}>
+      <Box sx={{
+        width: 34, height: 34, borderRadius: '10px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: `${CYAN}1a`, color: CYAN,
+      }}>
+        <Icon sx={{ fontSize: 18 }} />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontSize: '1.15rem', fontWeight: 800, color: theme.palette.text.primary, lineHeight: 1.1, fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
+          {value}
+        </Typography>
+        <Typography sx={{ fontSize: '0.7rem', color: theme.palette.text.secondary, fontWeight: 500 }}>
+          {label}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 export default function MapaCalor() {
   const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [mapData, setMapData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterPeriod, setFilterPeriod] = useState(6); // meses por defecto
+  const [filterPeriod, setFilterPeriod] = useState(6); // meses
 
-  // Función para obtener datos del heatmap desde el backend
   const fetchHeatmapData = async () => {
     try {
       setLoading(true);
-      
-      // Para períodos largos, no usar filtro de mes/año específico
-      let url = 'http://localhost:8001/heatmap';
-      
-      // Solo aplicar filtro de mes/año para períodos cortos (3-6 meses)
-      if (filterPeriod <= 6) {
-        const currentDate = new Date();
-        const targetDate = new Date();
-        targetDate.setMonth(currentDate.getMonth() - filterPeriod);
-        
-        const mes = targetDate.getMonth() + 1; // getMonth() devuelve 0-11
-        const anio = targetDate.getFullYear();
-        
-        url = `http://localhost:8001/heatmap?mes=${mes}&anio=${anio}`;
-      }
-      
-      console.log('Solicitando datos con URL:', url);
-      
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Datos del heatmap recibidos:', data);
-        
-        // Convertir datos a formato de mapa
-        const mapPoints = data.map((point, index) => ({
-          lat: point.lat,
-          lng: point.lon,
-          count: 1,
-          address: point.address,
-          user: point.user,
-          phone: point.phone,
-          total_spent: point.total_spent,
-          ticket_promedio: point.ticket_promedio,
-          fecha_ultimo_pedido: point.fecha_ultimo_pedido,
-          isClient: true
-        }));
-        
-        setMapData(mapPoints);
-        setLoading(false);
-      } else {
-        console.error('Error al obtener datos del heatmap:', response.status);
-        setLoading(false);
-      }
+      // "filterPeriod" son los últimos N meses desde hoy; el backend calcula
+      // el rango real (antes se pedía un único mes/año exacto).
+      const data = await getHeatmap(filterPeriod);
+      const mapPoints = data.map((point) => ({
+        lat: point.lat,
+        lng: point.lon,
+        address: point.address,
+        user: point.user,
+        phone: point.phone,
+        total_spent: point.total_spent,
+        ticket_promedio: point.ticket_promedio,
+        fecha_ultimo_pedido: point.fecha_ultimo_pedido,
+      }));
+      setMapData(mapPoints);
     } catch (error) {
       console.error('Error fetching heatmap data:', error);
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchHeatmapData();
-    
-    // Actualización automática cada 10 minutos
-    const interval = setInterval(() => {
-      console.log('Actualización automática del mapa de calor...');
-      fetchHeatmapData();
-    }, 10 * 60 * 1000); // 10 minutos
-
-    // Escuchar evento de actualización global
-    const handleGlobalRefresh = () => {
-      console.log('Actualización global detectada en MapaCalor...');
-      fetchHeatmapData();
-    };
-
+    const interval = setInterval(fetchHeatmapData, 10 * 60 * 1000);
+    const handleGlobalRefresh = () => fetchHeatmapData();
     window.addEventListener('globalRefresh', handleGlobalRefresh);
-
     return () => {
       clearInterval(interval);
       window.removeEventListener('globalRefresh', handleGlobalRefresh);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterPeriod]);
 
-  if (loading) {
-    return (
-      <Box sx={{ 
-        p: 3, 
-        ml: '280px',
-        bgcolor: 'background.default',
-        minHeight: '100vh'
-      }}>
-        <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-          <Typography variant="h4" sx={{ 
-            fontWeight: 700, 
-            color: 'text.primary',
-            mb: 1
-          }}>
-            Mapa de Calor - Concentración de Pedidos
-          </Typography>
-          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            Cargando datos del mapa...
-          </Typography>
-        </Box>
-      </Box>
-    );
-  }
+  const totalFacturado = mapData.reduce((sum, p) => sum + (parseInt(p.total_spent) || 0), 0);
 
   return (
-    <Box sx={{ 
-      p: 3, 
-      ml: '280px',
+    <Box sx={{
+      p: { xs: 2, md: 4 },
       bgcolor: 'background.default',
-      minHeight: '100vh'
+      minHeight: '100vh',
     }}>
       <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" sx={{ 
-            fontWeight: 700, 
-            color: 'text.primary',
-            mb: 1
-          }}>
-            Mapa de Calor - Concentración de Pedidos
-          </Typography>
-          <Typography variant="body1" sx={{ 
-            color: 'text.secondary',
-            mb: 3
-          }}>
-            Visualiza las zonas con mayor concentración de pedidos en el período seleccionado
-          </Typography>
-          
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 2,
-            mb: 3
-          }}>
-            <Typography variant="body2" sx={{ 
-              fontWeight: 600, 
-              color: 'text.primary'
-            }}>
-              Período de análisis:
-            </Typography>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <Select
-                value={filterPeriod}
-                onChange={(e) => setFilterPeriod(Number(e.target.value))}
-                sx={{
-                  borderRadius: 2,
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.divider,
-                  },
-                }}
-              >
-                <MenuItem value={3}>Últimos 3 meses</MenuItem>
-                <MenuItem value={6}>Últimos 6 meses</MenuItem>
-                <MenuItem value={12}>Últimos 12 meses</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-        </Box>
-        
-        <Card sx={{ 
-          bgcolor: 'background.paper',
-          boxShadow: theme.shadows[1],
-          borderRadius: 3,
-          border: `1px solid ${theme.palette.divider}`,
-          overflow: 'hidden'
+
+        {/* Header: título + selector de período, apilados en mobile */}
+        <Box sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'flex-end' },
+          gap: 2,
+          mb: 3,
         }}>
-          <CardContent sx={{ p: 3 }}>
-            <MapContainer
-              center={[-33.6167, -70.5833]} // Puente Alto, Santiago
-              zoom={12}
-              style={{ height: '600px', width: '100%' }}
-            >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              />
-              
-              <ZoomAwareCircles mapData={mapData} />
-            </MapContainer>
-            
-            <Box sx={{ 
-              mt: 3, 
-              p: 2, 
-              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f9fafb',
-              borderRadius: 2,
-              border: `1px solid ${theme.palette.divider}`
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{
+              fontWeight: 800, fontSize: { xs: '1.5rem', md: '1.85rem' },
+              color: theme.palette.text.primary, letterSpacing: '-0.02em',
+              fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
             }}>
-              <Typography variant="h6" sx={{ 
-                fontWeight: 600, 
-                color: 'text.primary',
-                mb: 2
-              }}>
-                Leyenda - Concentración de Pedidos
+              Mapa de Calor
+            </Typography>
+            <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.9rem', mt: 0.3 }}>
+              Dónde se concentran los pedidos de Aguas Ancud
+            </Typography>
+          </Box>
+
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 200 } }}>
+            <Select
+              value={filterPeriod}
+              onChange={(e) => setFilterPeriod(Number(e.target.value))}
+              sx={{
+                borderRadius: 2,
+                bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'background.paper',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.divider },
+              }}
+            >
+              <MenuItem value={3}>Últimos 3 meses</MenuItem>
+              <MenuItem value={6}>Últimos 6 meses</MenuItem>
+              <MenuItem value={12}>Últimos 12 meses</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+
+        {/* Resumen compacto: lo que antes era un bloque de texto al final del
+            todo, ahora está arriba como 3 datos rápidos de un vistazo. */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+          <StatCard icon={PlaceIcon} label="Direcciones en el mapa" value={mapData.length.toLocaleString('es-CL')} />
+          <StatCard icon={PaidIcon} label="Total facturado en el período" value={formatoCLP(totalFacturado)} />
+          <StatCard icon={ReceiptLongIcon} label="Período" value={`${filterPeriod} meses`} />
+        </Box>
+
+        {/* Mapa */}
+        <Box sx={{
+          borderRadius: '18px',
+          overflow: 'hidden',
+          border: `1px solid ${theme.palette.divider}`,
+          boxShadow: theme.shadows[1],
+          position: 'relative',
+        }}>
+          {loading && (
+            <Box sx={{
+              position: 'absolute', inset: 0, zIndex: 500,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 1.5,
+              bgcolor: isDark ? 'rgba(8,15,25,0.6)' : 'rgba(255,255,255,0.7)',
+              backdropFilter: 'blur(3px)',
+            }}>
+              <CircularProgress size={22} thickness={4} sx={{ color: CYAN }} />
+              <Typography sx={{ fontSize: '0.85rem', color: theme.palette.text.secondary, fontWeight: 500 }}>
+                Cargando mapa…
               </Typography>
-              
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ 
-                    width: 16, 
-                    height: 16, 
-                    borderRadius: '50%', 
-                    bgcolor: '#00cc00',
-                    border: '2px solid white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Baja concentración (0 - $3.000)
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ 
-                    width: 16, 
-                    height: 16, 
-                    borderRadius: '50%', 
-                    bgcolor: '#99cc00',
-                    border: '2px solid white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Baja-Media ($3.001 - $6.000)
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ 
-                    width: 16, 
-                    height: 16, 
-                    borderRadius: '50%', 
-                    bgcolor: '#ffcc00',
-                    border: '2px solid white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Media ($6.001 - $10.000)
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ 
-                    width: 16, 
-                    height: 16, 
-                    borderRadius: '50%', 
-                    bgcolor: '#ff6600',
-                    border: '2px solid white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Media-Alta ($10.001 - $15.000)
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ 
-                    width: 16, 
-                    height: 16, 
-                    borderRadius: '50%', 
-                    bgcolor: '#ff0000',
-                    border: '2px solid white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Alta concentración ($15.001+)
-                  </Typography>
-                </Box>
-              </Box>
-              
-              <Box sx={{ 
-                pt: 2, 
-                borderTop: `1px solid ${theme.palette.divider}`
-              }}>
-                <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
-                  <strong>Total de pedidos mostrados:</strong> {mapData.length}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
-                  <strong>Período:</strong> Últimos {filterPeriod} meses
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.primary', mb: 1 }}>
-                  <strong>Total facturado:</strong> ${mapData.reduce((sum, point) => sum + parseInt(point.total_spent || 0), 0).toLocaleString('es-CL')}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-                  💡 Los círculos se ajustan automáticamente al nivel de zoom
-                </Typography>
-              </Box>
             </Box>
-          </CardContent>
-        </Card>
+          )}
+
+          {!loading && mapData.length === 0 && (
+            <Box sx={{
+              position: 'absolute', inset: 0, zIndex: 500,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 1, textAlign: 'center', px: 3,
+              bgcolor: isDark ? 'rgba(8,15,25,0.72)' : 'rgba(255,255,255,0.85)',
+              backdropFilter: 'blur(4px)',
+            }}>
+              <PlaceIcon sx={{ fontSize: 30, color: theme.palette.text.secondary, opacity: 0.5 }} />
+              <Typography sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+                No hay pedidos en este período
+              </Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: theme.palette.text.secondary, maxWidth: 320 }}>
+                Prueba con un rango más amplio, como "Últimos 12 meses".
+              </Typography>
+            </Box>
+          )}
+
+          <MapContainer
+            center={[-33.6167, -70.5833]} // Puente Alto, Santiago
+            zoom={12}
+            className={`heatmap-map ${isDark ? 'heatmap-map--dark' : ''}`}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
+            <ZoomAwareCircles mapData={mapData} />
+          </MapContainer>
+        </Box>
+
+        {/* Leyenda: franja horizontal compacta en vez del bloque largo de antes */}
+        <Box sx={{
+          mt: 2,
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: { xs: 1.5, sm: 2.5 },
+          rowGap: 1,
+        }}>
+          {NIVELES.map((n) => (
+            <Box key={n.etiqueta} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: n.color, flexShrink: 0 }} />
+              <Typography sx={{ fontSize: '0.75rem', color: theme.palette.text.secondary, whiteSpace: 'nowrap' }}>
+                {n.etiqueta}
+              </Typography>
+            </Box>
+          ))}
+          <Typography sx={{ fontSize: '0.75rem', color: theme.palette.text.secondary, opacity: 0.7, ml: { sm: 'auto' } }}>
+            Toca un punto para ver el detalle
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );
-} 
+}

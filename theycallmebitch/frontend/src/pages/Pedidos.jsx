@@ -11,7 +11,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   const theme = useTheme();
   const [pedidos, setPedidos] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState('2025-09-01'); // Fecha con datos por defecto
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [pagina, setPagina] = useState(1);
   const pedidosPorPagina = 10;
   
@@ -64,9 +64,14 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   // Definir fecha seleccionada al principio
   const fechaSeleccionada = selectedDate; // Formato YYYY-MM-DD
 
-  // Filtro de búsqueda SIN filtro de fecha temporalmente
+  // Filtro por fecha seleccionada + búsqueda (compatible con ambos esquemas).
+  // La tabla debe reflejar la misma fecha que las tarjetas resumen de arriba,
+  // que ya calculan sus totales exclusivamente para fechaSeleccionada.
   const filteredPedidos = pedidos.filter(p => {
-    // Solo aplicar filtro de búsqueda (compatible con ambos esquemas)
+    const fechaPedido = parseFecha(p.fecha || p.createdAt);
+    const fechaPedidoStr = fechaPedido ? fechaPedido.toISOString().split('T')[0] : null;
+    if (fechaPedidoStr !== fechaSeleccionada) return false;
+
     const texto = `${p.fecha || p.createdAt || ''} ${p.dire || p.customer?.address || ''} ${p.usuario || p.customer?.name || ''} ${p.precio || p.price || ''} ${p.status || ''}`.toLowerCase();
     return texto.includes(searchTerm.toLowerCase());
   });
@@ -100,6 +105,13 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     }
     
     return null;
+  }
+
+  // Formatea un string YYYY-MM-DD a DD/MM/YYYY sin pasar por Date/zona horaria
+  // (new Date('YYYY-MM-DD') se interpreta en UTC y en Chile muestra el día anterior).
+  function formatFechaSeleccionada(fechaYMD) {
+    const [y, m, d] = fechaYMD.split('-');
+    return `${d}/${m}/${y}`;
   }
 
 
@@ -136,9 +148,18 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     }
   };
 
-  // Filtrar pedidos por fecha seleccionada
+  // Un pedido cancelado no es una venta real: se excluye de todos los
+  // totales/resúmenes (pero se sigue mostrando en la tabla, para que quede
+  // registro de que existió y fue cancelado).
+  const esCancelado = (status) => {
+    const s = (status || '').toLowerCase().trim();
+    return s.includes('cancelado') || s.includes('cancelada') || s.includes('anulado');
+  };
+
+  // Filtrar pedidos por fecha seleccionada, excluyendo cancelados
   const pedidosFechaSeleccionadaCompletos = pedidos.filter(p => {
-    const fechaPedido = parseFecha(p.fecha);
+    if (esCancelado(p.status)) return false;
+    const fechaPedido = parseFecha(p.fecha || p.createdAt);
     if (!fechaPedido) return false;
     const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
     return fechaPedidoStr === fechaSeleccionada;
@@ -149,31 +170,36 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   const countEfectivo = pedidosFechaSeleccionadaCompletos.filter(p => (p.metodopago || '').toLowerCase().includes('efectivo')).length;
   const countTransferencia = pedidosFechaSeleccionadaCompletos.filter(p => (p.metodopago || '').toLowerCase().includes('transfer')).length;
   const countTarjeta = pedidosFechaSeleccionadaCompletos.filter(p => (p.metodopago || '').toLowerCase().includes('tarjeta')).length;
-  
+
   // Nuevos cálculos para pedidos del día seleccionado y bidones vendidos
-  
-  // Calcular pedidos y bidones de la FECHA SELECCIONADA usando TODOS los pedidos (no filtrados)
+
+  // Calcular pedidos y bidones de la FECHA SELECCIONADA, excluyendo cancelados
   const pedidosFechaSeleccionada = pedidos.filter(p => {
+    if (esCancelado(p.status)) return false;
     const fechaPedido = parseFecha(p.fecha || p.createdAt);
     if (!fechaPedido) return false;
     const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
     return fechaPedidoStr === fechaSeleccionada;
   }).length;
-  
-  // Calcular bidones vendidos en la fecha seleccionada usando TODOS los pedidos
+
+  // Calcular bidones vendidos en la fecha seleccionada, excluyendo cancelados
   const pedidosFechaSeleccionadaData = pedidos.filter(p => {
+    if (esCancelado(p.status)) return false;
     const fechaPedido = parseFecha(p.fecha || p.createdAt);
     if (!fechaPedido) return false;
     const fechaPedidoStr = fechaPedido.toISOString().split('T')[0];
     return fechaPedidoStr === fechaSeleccionada;
   });
-  
+
   const bidonesFechaSeleccionada = pedidosFechaSeleccionadaData.reduce((sum, p) => {
     let cantidad = 1;
-    
+
     // Nuevo esquema: usar products array
     if (p.products && Array.isArray(p.products)) {
       cantidad = p.products.reduce((total, product) => total + (product.quantity || 1), 0);
+    } else if (p.ordenpedido) {
+      // Cantidad real del pedido (mismo campo que usa el backend)
+      cantidad = parseInt(String(p.ordenpedido).replace(/[^\d]/g, ''), 10) || NaN;
     } else {
       // Esquema legacy: intentar obtener cantidad de campos específicos
       if (p.cantidad) cantidad = Number(p.cantidad);
@@ -183,7 +209,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
       else if (p.bidones) cantidad = Number(p.bidones);
       else if (p.unidades) cantidad = Number(p.unidades);
       else cantidad = NaN; // Si no hay ningún campo, forzar NaN
-      
+
       // Si no hay campo de cantidad específica, calcular basándose en el precio
       if (isNaN(cantidad) || cantidad <= 0) {
         const precio = Number(p.precio || p.price) || 0;
@@ -193,7 +219,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
         }
       }
     }
-    
+
     return sum + cantidad;
   }, 0);
   
@@ -201,11 +227,19 @@ export default function Pedidos({ refreshTrigger = 0 }) {
   
 
   
-  // Calcular bidones vendidos
-  const bidonesVendidos = filteredPedidos.reduce((sum, p) => {
+  // Total histórico de bidones (todos los pedidos cargados, sin filtro de fecha
+  // ni búsqueda, excluyendo cancelados) — usado solo para el tooltip comparativo
+  // de la tarjeta de bidones.
+  const bidonesVendidos = pedidos.filter(p => !esCancelado(p.status)).reduce((sum, p) => {
+    // Cantidad real del pedido (mismo campo que usa el backend)
+    if (p.ordenpedido) {
+      const real = parseInt(String(p.ordenpedido).replace(/[^\d]/g, ''), 10);
+      if (!isNaN(real) && real > 0) return sum + real;
+    }
+
     // Intentar obtener cantidad de diferentes campos posibles
     let cantidad = 1; // Por defecto 1 bidón por pedido
-    
+
     // Buscar en diferentes campos posibles
     if (p.cantidad) cantidad = Number(p.cantidad);
     else if (p.cant) cantidad = Number(p.cant);
@@ -213,7 +247,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
     else if (p.quantity) cantidad = Number(p.quantity);
     else if (p.bidones) cantidad = Number(p.bidones);
     else if (p.unidades) cantidad = Number(p.unidades);
-    
+
     // Si no se pudo convertir a número, calcular basándose en el precio
     if (isNaN(cantidad) || cantidad <= 0) {
       const precio = Number(p.precio) || 0;
@@ -221,7 +255,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
         cantidad = Math.ceil(precio / 2000); // $2,000 por bidón
       }
     }
-    
+
     return sum + cantidad; // Removido Math.max(1, cantidad) para usar el cálculo real
   }, 0);
 
@@ -285,7 +319,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               border: `1px solid ${theme.palette.divider}` 
             }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title={`Suma total de ventas del ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
+                <Tooltip title={`Suma total de ventas del ${formatFechaSeleccionada(selectedDate)}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>${ventasTotales.toLocaleString()}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -306,7 +340,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               border: `1px solid ${theme.palette.divider}` 
             }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title={`Pedidos pagados en efectivo el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
+                <Tooltip title={`Pedidos pagados en efectivo el ${formatFechaSeleccionada(selectedDate)}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{countEfectivo}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -327,7 +361,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               border: `1px solid ${theme.palette.divider}` 
             }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title={`Pedidos pagados por transferencia el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
+                <Tooltip title={`Pedidos pagados por transferencia el ${formatFechaSeleccionada(selectedDate)}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{countTransferencia}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -348,7 +382,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               border: `1px solid ${theme.palette.divider}` 
             }}>
               <CardContent sx={{ p: 3 }}>
-                <Tooltip title={`Pedidos pagados con tarjeta el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
+                <Tooltip title={`Pedidos pagados con tarjeta el ${formatFechaSeleccionada(selectedDate)}`} placement="top" arrow>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', cursor: 'pointer' }}>{countTarjeta}</Typography>
                 </Tooltip>
                 <Typography variant="body1" sx={{ 
@@ -371,7 +405,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <LocalShippingIcon sx={{ color: '#10b981', fontSize: 20 }} />
-                  <Tooltip title={`${pedidosFechaSeleccionada} pedidos realizados el ${new Date(selectedDate).toLocaleDateString('es-ES')}`} placement="top" arrow>
+                  <Tooltip title={`${pedidosFechaSeleccionada} pedidos realizados el ${formatFechaSeleccionada(selectedDate)}`} placement="top" arrow>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#10b981', cursor: 'pointer' }}>{pedidosFechaSeleccionada}</Typography>
                   </Tooltip>
                 </Box>
@@ -382,7 +416,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                   WebkitFontSmoothing: 'antialiased',
                   MozOsxFontSmoothing: 'grayscale',
                   textRendering: 'optimizeLegibility'
-                }}>Pedidos {selectedDate === new Date().toISOString().split('T')[0] ? 'Hoy' : 'del Día'}</Typography>
+                }}>Pedidos {selectedDate === new Date().toLocaleDateString('en-CA') ? 'Hoy' : 'del Día'}</Typography>
               </CardContent>
             </Card>
             <Card sx={{ 
@@ -395,7 +429,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <InventoryIcon sx={{ color: '#f59e0b', fontSize: 20 }} />
-                  <Tooltip title={`${bidonesFechaSeleccionada} bidones vendidos el ${new Date(selectedDate).toLocaleDateString('es-ES')} | Total histórico: ${bidonesVendidos} bidones`} placement="top" arrow>
+                  <Tooltip title={`${bidonesFechaSeleccionada} bidones vendidos el ${formatFechaSeleccionada(selectedDate)} | Total histórico: ${bidonesVendidos} bidones`} placement="top" arrow>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: '#f59e0b', cursor: 'pointer' }}>{bidonesFechaSeleccionada}</Typography>
                   </Tooltip>
                 </Box>
@@ -406,7 +440,7 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                   WebkitFontSmoothing: 'antialiased',
                   MozOsxFontSmoothing: 'grayscale',
                   textRendering: 'optimizeLegibility'
-                }}>Bidones {selectedDate === new Date().toISOString().split('T')[0] ? 'Hoy' : 'del Día'}</Typography>
+                }}>Bidones {selectedDate === new Date().toLocaleDateString('en-CA') ? 'Hoy' : 'del Día'}</Typography>
               </CardContent>
             </Card>
           </Box>
@@ -425,6 +459,14 @@ export default function Pedidos({ refreshTrigger = 0 }) {
                 </TableRow>
               </TableHead>
               <TableBody>
+                {pedidosPagina.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+                      No hay pedidos para el {formatFechaSeleccionada(selectedDate)}
+                      {searchTerm ? ' que coincidan con la búsqueda.' : '.'}
+                    </TableCell>
+                  </TableRow>
+                )}
                 {pedidosPagina.map((p, i) => (
                   <TableRow key={i} sx={{ '&:hover': { bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' } }}>
                     <TableCell>

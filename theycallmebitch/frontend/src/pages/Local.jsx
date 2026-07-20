@@ -23,18 +23,13 @@ import {
   LinearProgress,
   Tooltip
 } from '@mui/material';
-import { 
-  TrendingUp, 
+import {
+  TrendingUp,
   TrendingDown,
-  Store,
   AttachMoney,
   ShoppingCart,
   People,
   Inventory,
-  Schedule,
-  LocationOn,
-  Phone,
-  Email,
   Info
 } from '@mui/icons-material';
 // Importar los mismos componentes del dashboard principal
@@ -52,233 +47,6 @@ import MetodosPagoLocalCard from '../components/MetodosPagoLocalCard';
 import './Local.css';
 import { getVentasLocales } from '../services/api';
 
-// Función para procesar datos del endpoint de ventas locales
-const procesarDatosVentasLocales = (datos) => {
-  console.log('🔄 Iniciando procesamiento de datos locales...');
-  console.log('📊 Datos recibidos:', datos);
-  console.log('📊 Número de registros:', datos?.length || 0);
-  
-  if (!datos || !Array.isArray(datos)) {
-    console.log('❌ Datos inválidos o vacíos');
-    return {
-      ventasTotales: 0,
-      ventasSemanales: 0,
-      ventasDiarias: 0,
-      ventasMes: 0,
-      bidonesVendidos: 0,
-      costos: 0,
-      datosProcesados: [],
-      metodosPago: {},
-      ventasDiariasArray: [],
-      ventasMesAnterior: 0,
-      bidonesMesAnterior: 0,
-      transaccionesMesAnterior: 0,
-      ticketPromedio: 0,
-      ticketPromedioMesPasado: 0
-    };
-  }
-
-  // Encontrar la fecha más reciente en los datos para usar como referencia
-  let fechaMasReciente = new Date(0);
-  datos.forEach(venta => {
-    try {
-      const partes = venta.fecha.split('-');
-      if (partes.length === 3) {
-        const dia = parseInt(partes[0]);
-        const mes = parseInt(partes[1]) - 1;
-        const año = parseInt(partes[2]);
-        const fechaVenta = new Date(año, mes, dia);
-        if (fechaVenta > fechaMasReciente) {
-          fechaMasReciente = fechaVenta;
-        }
-      }
-    } catch (error) {
-      console.error('Error procesando fecha para referencia:', venta.fecha, error);
-    }
-  });
-  
-  // Usar la fecha actual real para el apartado LOCAL
-  const fechaActual = new Date();
-  
-  console.log('📅 Fecha de referencia para LOCAL:', fechaActual.toISOString());
-  
-  // Calcular períodos
-  const inicioSemana = new Date(fechaActual);
-  inicioSemana.setDate(fechaActual.getDate() - fechaActual.getDay());
-  inicioSemana.setHours(0, 0, 0, 0);
-  
-  const inicioMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1);
-  const inicioDia = new Date(fechaActual);
-  inicioDia.setHours(0, 0, 0, 0);
-  
-  // Calcular mes anterior para comparaciones
-  const mesAnterior = new Date(fechaActual.getFullYear(), fechaActual.getMonth() - 1, 1);
-  const finMesAnterior = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 0);
-
-  let ventasTotales = 0;
-  let ventasSemanales = 0;
-  let ventasDiarias = 0;
-  let ventasMes = 0;
-  let bidonesVendidos = 0;
-  let metodosPago = {};
-  let datosProcesados = [];
-  let ventasMesAnterior = 0;
-  let bidonesMesAnterior = 0;
-  let transaccionesMesAnterior = 0;
-
-  datos.forEach(venta => {
-    const precio = parseInt(venta.precio);
-    
-    // Procesar fecha con formato DD-MM-YYYY
-    let fechaVenta;
-    try {
-      const partes = venta.fecha.split('-');
-      if (partes.length === 3) {
-        const dia = parseInt(partes[0]);
-        const mes = parseInt(partes[1]) - 1;
-        const año = parseInt(partes[2]);
-        fechaVenta = new Date(año, mes, dia);
-      } else {
-        fechaVenta = new Date(venta.fecha.split('-').reverse().join('-'));
-      }
-    } catch (error) {
-      console.error('Error procesando fecha:', venta.fecha, error);
-      fechaVenta = new Date();
-    }
-    
-    fechaVenta.setHours(0, 0, 0, 0);
-
-    // Calcular bidones basado en la promoción acumulable (3 bidones por $5,000)
-    const bidones = Math.floor(precio / 5000) * 3;
-
-    // Procesar método de pago
-    const metodo = venta.metodopago || 'desconocido';
-    if (!metodosPago[metodo]) {
-      metodosPago[metodo] = { cantidad: 0, monto: 0 };
-    }
-    metodosPago[metodo].cantidad++;
-    metodosPago[metodo].monto += precio;
-
-    const ventaProcesada = {
-      ...venta,
-      precio: precio,
-      bidones: bidones,
-      fecha: fechaVenta
-    };
-
-    datosProcesados.push(ventaProcesada);
-
-    // Ventas totales (todo el historial)
-    ventasTotales += precio;
-
-    // Ventas del mes actual
-    if (fechaVenta >= inicioMes) {
-      ventasMes += precio;
-      bidonesVendidos += bidones;
-    }
-
-    // Ventas de la semana actual
-    if (fechaVenta >= inicioSemana) {
-      ventasSemanales += precio;
-    }
-
-    // Ventas del día actual
-    if (fechaVenta >= inicioDia) {
-      ventasDiarias += precio;
-    }
-
-    // Ventas del mes anterior
-    if (fechaVenta >= mesAnterior && fechaVenta <= finMesAnterior) {
-      ventasMesAnterior += precio;
-      bidonesMesAnterior += bidones;
-      transaccionesMesAnterior++;
-    }
-  });
-
-  // Generar datos de ventas diarias para la semana actual (Lunes a Domingo)
-  const ventasDiariasArray = [];
-  const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  
-  // Calcular el lunes de esta semana
-  const lunesSemana = new Date(fechaActual);
-  const diaSemana = fechaActual.getDay();
-  const diasDesdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
-  lunesSemana.setDate(fechaActual.getDate() - diasDesdeLunes);
-  lunesSemana.setHours(0, 0, 0, 0);
-  
-  // Generar datos para cada día de la semana
-  for (let i = 0; i < 7; i++) {
-    const fecha = new Date(lunesSemana);
-    fecha.setDate(lunesSemana.getDate() + i);
-    fecha.setHours(0, 0, 0, 0);
-    
-    const ventasDelDia = datosProcesados
-      .filter(venta => {
-        const ventaFecha = new Date(venta.fecha);
-        ventaFecha.setHours(0, 0, 0, 0);
-        return ventaFecha.getTime() === fecha.getTime();
-      })
-      .reduce((total, venta) => total + venta.precio, 0);
-    
-    const clientesDelDia = datosProcesados
-      .filter(venta => {
-        const ventaFecha = new Date(venta.fecha);
-        ventaFecha.setHours(0, 0, 0, 0);
-        return ventaFecha.getTime() === fecha.getTime();
-      }).length;
-    
-    const bidonesDelDia = datosProcesados
-      .filter(venta => {
-        const ventaFecha = new Date(venta.fecha);
-        ventaFecha.setHours(0, 0, 0, 0);
-        return ventaFecha.getTime() === fecha.getTime();
-      })
-      .reduce((total, venta) => total + venta.bidones, 0);
-    
-    const diaData = {
-      dia: diasSemana[fecha.getDay()],
-      ventas: ventasDelDia,
-      clientes: clientesDelDia,
-      bidones: bidonesDelDia,
-      promedio: clientesDelDia > 0 ? Math.round(ventasDelDia / clientesDelDia) : 0
-    };
-    
-    ventasDiariasArray.push(diaData);
-  }
-
-  // Calcular ticket promedio
-  const transaccionesMes = datosProcesados.filter(d => {
-    const fecha = new Date(d.fecha);
-    return fecha >= inicioMes;
-  }).length;
-  
-  const ticketPromedio = transaccionesMes > 0 ? Math.round(ventasMes / transaccionesMes) : 0;
-  const ticketPromedioMesPasado = transaccionesMesAnterior > 0 ? Math.round(ventasMesAnterior / transaccionesMesAnterior) : 0;
-
-  console.log('📊 RESUMEN FINAL:');
-  console.log(`  Ventas del día: $${ventasDiarias}`);
-  console.log(`  Ventas de la semana: $${ventasSemanales}`);
-  console.log(`  Ventas del mes: $${ventasMes}`);
-  console.log(`  Bidones vendidos: ${bidonesVendidos}`);
-  console.log(`  Ticket promedio: $${ticketPromedio}`);
-  console.log(`  Métodos de pago:`, metodosPago);
-  
-  return {
-    ventasTotales,
-    ventasSemanales,
-    ventasDiarias,
-    ventasMes,
-    ventasDiariasArray,
-    bidonesVendidos,
-    datosProcesados,
-    metodosPago,
-    ventasMesAnterior,
-    bidonesMesAnterior,
-    transaccionesMesAnterior,
-    ticketPromedio,
-    ticketPromedioMesPasado
-  };
-};
 
   // Función para obtener datos del endpoint
   const obtenerDatosVentasLocales = async () => {
@@ -341,13 +109,6 @@ export default function Local() {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [localData, setLocalData] = useState({
-    // Información del local
-    nombre: "Aguas Ancud - Local Principal",
-    direccion: "Av. Libertad 123, Ancud",
-    telefono: "+56 9 1234 5678",
-    email: "ventas@aguasancud.cl",
-    horario: "Lunes a Sábado: 8:00 - 20:00",
-    
     // Datos de venta del local (se actualizarán con datos reales)
     ventasHoy: 0,
     ventasSemana: 0,
@@ -391,12 +152,18 @@ export default function Local() {
       { dia: 'Sábado', ventas: 0, clientes: 0, bidones: 0 },
       { dia: 'Domingo', ventas: 0, clientes: 0, bidones: 0 }
     ],
-    
+
+    // Tendencias reales para las tarjetas de resumen
+    tendenciaMensualReal: [],
+    tendenciaSemanalReal: [],
+    tendenciaDiariaReal: [],
+
     // Productos más vendidos
     productosTop: [],
     
     // Métodos de pago utilizados
-    metodosPago: [],
+    metodosPago: {},
+    totalTransacciones: 0,
     
     // Personal del local
     personal: []
@@ -437,26 +204,36 @@ export default function Local() {
           
           // Número de transacciones del LOCAL
           clientesMes: datosProcesados.total_transacciones,
-          clientesHoy: datosProcesados.ventas_hoy > 0 ? 1 : 0, // Estimación simple
-          
-          // Datos de comparación del LOCAL (mes anterior) - usar datos por defecto
-          ventasMesPasado: 0, // No hay datos del mes anterior en el endpoint actual
+          // El backend no entrega un conteo de transacciones por día (solo ventas y
+          // bidones), así que no hay forma de mostrar un número real aquí todavía.
+          // Antes se "estimaba" como 1 si hubo ventas ese día, lo cual era inventado.
+          clientesHoy: 0,
+
+          // Comparación con el mes anterior: dato real del backend.
+          // (Backend no calcula todavía un "mismo día/semana del mes anterior" para
+          // el local, así que esas dos comparaciones puntuales quedan en 0 por ahora
+          // en vez de aproximar con una fórmula inventada.)
+          ventasMesPasado: datosProcesados.ventas_mes_pasado || 0,
           ventasHoyMesPasado: 0,
           ventasSemanaMesPasado: 0,
           ventasAnioPasado: 0,
-          clientesMesPasado: 0,
-          bidonesVendidosMesPasado: 0,
-          ticketPromedioMesPasado: 0,
+          clientesMesPasado: datosProcesados.total_transacciones_mes_pasado || 0,
+          bidonesVendidosMesPasado: datosProcesados.bidones_mes_pasado || 0,
+          ticketPromedioMesPasado: datosProcesados.ticket_promedio_mes_pasado || 0,
           
           // Datos de ventas diarias para el gráfico
           ventasDiarias: datosProcesados.ventas_diarias || [],
-          
-          // Métodos de pago
-          metodosPago: Object.entries(datosProcesados.metodos_pago || {}).map(([metodo, cantidad]) => ({
-            metodo,
-            cantidad,
-            porcentaje: (cantidad / datosProcesados.total_transacciones * 100).toFixed(1)
-          })),
+
+          // Tendencias reales entregadas por el backend, para las tarjetas de resumen
+          // (el backend las entrega de más reciente a más antigua, por eso se invierten)
+          tendenciaMensualReal: [...(datosProcesados.ventas_mensuales || [])].reverse(),
+          tendenciaSemanalReal: [...(datosProcesados.ventas_semanales || [])].reverse(),
+          tendenciaDiariaReal: datosProcesados.ventas_diarias || [],
+
+          // Métodos de pago: el backend solo entrega conteo de transacciones por método
+          // (no un monto por método), así que se pasa el diccionario crudo tal cual.
+          metodosPago: datosProcesados.metodos_pago || {},
+          totalTransacciones: datosProcesados.total_transacciones || 0,
         }));
       } catch (error) {
         console.error('Error cargando datos locales:', error);
@@ -489,6 +266,11 @@ export default function Local() {
     if (anterior === 0) return actual > 0 ? 100 : 0;
     return ((actual - anterior) / anterior) * 100;
   };
+
+  // Escala del gráfico de ventas diarias: se adapta al máximo real de los datos
+  // en vez de un rango fijo $5.000–$40.000 (las ventas del local suelen ser
+  // mucho más chicas y muchos días son $0, con escala fija se veían planas).
+  const maxVentaDiaGrafico = Math.max(...localData.ventasDiarias.map(d => d.ventas || 0), 1000);
 
   if (loading) {
     return (
@@ -557,11 +339,17 @@ export default function Local() {
       </Box>
 
       {/* Contenedor principal mejorado */}
-      <Box sx={{ 
+      <Box sx={{
         minHeight: '100vh',
         bgcolor: 'background.default',
-        padding: { xs: 2, md: 4 },
-        paddingTop: '220px', // Espacio para el header fijo mejorado
+        // paddingLeft/Right/Bottom por separado (no el shorthand "padding"): mezclar
+        // "padding" con "paddingTop" hacía que la media query del shorthand
+        // sobreescribiera paddingTop en desktop, dejando el header fijo tapando
+        // la primera fila de tarjetas.
+        paddingLeft: { xs: 2, md: 4 },
+        paddingRight: { xs: 2, md: 4 },
+        paddingBottom: { xs: 2, md: 4 },
+        paddingTop: '160px', // Espacio para el header fijo (ahora más bajo sin el bloque de contacto)
         position: 'relative',
         overflow: 'auto',
         height: '100vh',
@@ -572,115 +360,50 @@ export default function Local() {
         {/* Contenido principal */}
         <Box sx={{ 
           position: 'relative',
-          minHeight: 'calc(100vh - 220px)',
+          minHeight: 'calc(100vh - 160px)',
           width: '100%',
           paddingBottom: '200px',
           maxWidth: '100%',
           margin: '0 auto'
         }}>
 
-      {/* Header del Local */}
-      <Card sx={{ 
-        bgcolor: 'background.paper',
-        borderRadius: 3,
-        border: `1px solid ${theme.palette.divider}`,
-        boxShadow: theme.shadows[1],
-        mb: 4,
-        transition: 'all 0.3s ease-in-out',
-        '&:hover': {
-          boxShadow: theme.shadows[4],
-        }
-      }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Store sx={{ fontSize: 32, color: 'primary.main', mr: 2 }} />
-            <Box>
-              <Typography variant="h4" sx={{ 
-                fontWeight: 700, 
-                color: theme.palette.text.primary,
-                fontFamily: '"Inter", "Roboto", "Helvetica Neue", Arial, sans-serif',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale',
-                textRendering: 'optimizeLegibility'
-              }}>
-                {localData.nombre}
-              </Typography>
-              <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
-                Gestión y administración del local físico
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <LocationOn sx={{ color: 'primary.main', mr: 1 }} />
-                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  {localData.direccion}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Phone sx={{ color: 'primary.main', mr: 1 }} />
-                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  {localData.telefono}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Email sx={{ color: 'primary.main', mr: 1 }} />
-                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  {localData.email}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Schedule sx={{ color: 'primary.main', mr: 1 }} />
-                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  {localData.horario}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
       {/* Dashboard Local - Mismo estilo que Home */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Primera fila - Ventas principales del LOCAL */}
         <Grid item xs={12} sm={6} md={3}>
-          <VentasDiariasLocalCard 
+          <VentasDiariasLocalCard
             title="VENTAS DIARIAS"
             subtitle="Hoy vs Mismo día mes anterior"
             ventasDiarias={localData.ventasHoy}
             ventasDiaAnterior={localData.ventasHoyMesPasado}
+            tendenciaReal={localData.tendenciaDiariaReal}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <VentasSemanalesLocalCard 
+          <VentasSemanalesLocalCard
             title="VENTAS SEMANALES"
             subtitle="Esta semana"
             ventasSemanales={localData.ventasSemana}
             ventasSemanaAnterior={localData.ventasSemanaMesPasado}
+            tendenciaReal={localData.tendenciaSemanalReal}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <VentasMensualesLocalCard 
+          <VentasMensualesLocalCard
             title="VENTAS MENSUALES"
             subtitle="Este mes"
             ventasMensuales={localData.ventasMes}
             ventasMesAnterior={localData.ventasMesPasado}
+            tendenciaReal={localData.tendenciaMensualReal}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <VentasTotalesLocalCard 
+          <VentasTotalesLocalCard
             title="VENTAS TOTALES LOCALES"
             subtitle="Acumulado del local"
             ventasTotales={localData.ventasAnio}
             ventasAnioPasado={localData.ventasAnioPasado}
+            tendenciaReal={localData.tendenciaMensualReal}
           />
         </Grid>
 
@@ -812,21 +535,25 @@ export default function Local() {
 
 
         <Grid item xs={12} sm={6} md={3}>
-          <MetodosPagoLocalCard 
+          <MetodosPagoLocalCard
             title="MÉTODOS DE PAGO"
             subtitle="Distribución de pagos por método en el local"
             metodosPago={localData.metodosPago || {}}
-            totalVentas={localData.ventasMes}
+            totalTransacciones={localData.totalTransacciones}
           />
         </Grid>
 
         {/* Tercera fila - Meta de Ventas Local */}
         <Grid item xs={12} sm={6} md={6}>
-          <KpiMetaCard 
+          <KpiMetaCard
             title="META DE VENTAS LOCAL"
             currentValue={localData.ventasMes}
-            targetValue={500000} // Meta fija de $500,000
-            percentage={Math.round((localData.ventasMes / 500000) * 100)}
+            // Meta dinámica: ventas del mes anterior + 10% (mismo criterio que la
+            // meta del Home), no un número fijo inventado.
+            targetValue={Math.round((localData.ventasMesPasado || 0) * 1.1)}
+            percentage={localData.ventasMesPasado > 0
+              ? Math.min(100, Math.round((localData.ventasMes / (localData.ventasMesPasado * 1.1)) * 100))
+              : 0}
             subtitle="Objetivo Mensual"
           />
         </Grid>
@@ -906,9 +633,9 @@ export default function Local() {
               
               {/* Barras del gráfico */}
               {localData.ventasDiarias.map((dia, index) => {
-                // Escala fija de 5,000 a 40,000 para las barras
+                // Escala dinámica: 0 hasta el máximo real de ventas de la semana
                 const maxHeight = 320; // Altura máxima en píxeles (mucho más grande)
-                const barHeight = Math.max(((dia.ventas - 5000) / 35000) * maxHeight, 12); // Mínimo 12px de altura
+                const barHeight = dia.ventas > 0 ? Math.max((dia.ventas / maxVentaDiaGrafico) * maxHeight, 12) : 0;
                 const barWidth = 100; // Ancho de barra (más ancho)
                 const availableWidth = 700; // Ancho disponible (820 - 120)
                 const totalBars = localData.ventasDiarias.length;
@@ -978,11 +705,15 @@ export default function Local() {
               
               {/* Líneas de referencia horizontales con montos */}
               {(() => {
-                const montos = [5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000];
-                
+                // 5 líneas de referencia repartidas entre 0 y el máximo real de la semana
+                const pasos = 5;
+                const montos = Array.from({ length: pasos }, (_, i) =>
+                  Math.round((maxVentaDiaGrafico / pasos) * (i + 1))
+                );
+
                 return montos.map((monto, index) => {
                   const maxHeight = 320; // Altura máxima en píxeles (mucho más grande)
-                  const y = 420 - ((monto - 5000) / 35000) * maxHeight; // Escala de 5,000 a 40,000
+                  const y = 420 - (monto / maxVentaDiaGrafico) * maxHeight;
                   return (
                     <g key={index}>
                       <line 

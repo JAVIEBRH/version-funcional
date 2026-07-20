@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Chip, Tooltip } from '@mui/material';
 import { getVentasHistoricas } from '../services/api';
+import { glassCardSx } from '../utils/glassCard';
+
+const ACCENT = '#f59e0b';
 
 const IvaCard = ({ 
   title = 'IVA', 
@@ -51,17 +54,10 @@ const IvaCard = ({
         return mesNumero === mesAnterior && item.ventas > 0;
       });
       
-      // Calcular IVA: 19% de las ventas
-      const ventasActual = ventasMesActual?.ventas || 0;
+      // Calcular IVA: débito fiscal (el precio de venta ya incluye el 19%)
       const ventasAnterior = ventasMesAnterior?.ventas || 0;
-      
-      const ivaActual = ventasActual * 0.19;
-      const ivaAnterior = ventasAnterior * 0.19;
-      
-      const porcentajeCambio = ivaAnterior > 0 
-        ? ((ivaActual - ivaAnterior) / ivaAnterior) * 100 
-        : 0;
-      
+      const ivaAnterior = ventasAnterior * (0.19 / 1.19);
+
       // Generar tendencia mensual basada en datos históricos
       const tendenciaMensual = [];
       const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -77,22 +73,22 @@ const IvaCard = ({
         });
         
         const ventasMesValor = ventasMes?.ventas || 0;
-        const ivaMes = ventasMesValor * 0.19;
-        
+        const ivaMes = ventasMesValor * (0.19 / 1.19);
+
         tendenciaMensual.push({
           mes: mesesNombres[mesIndex],
           iva: ivaMes
         });
       }
-      
-      setIvaData({
-        iva_mes_actual: ivaActual,
+
+      // El valor y porcentaje reales vienen del backend vía props (/kpis);
+      // aquí solo enriquecemos con el mes anterior y la tendencia para el gráfico.
+      setIvaData(prev => ({
+        ...prev,
         iva_mes_anterior: ivaAnterior,
-        porcentaje_cambio: porcentajeCambio,
-        es_positivo: porcentajeCambio >= 0,
         tendencia_mensual: tendenciaMensual,
         fecha_analisis: hoy.toISOString()
-      });
+      }));
     } catch (error) {
       console.error('Error obteniendo IVA mensual:', error);
     } finally {
@@ -100,21 +96,24 @@ const IvaCard = ({
     }
   };
 
-  // Cargar datos al montar el componente
+  // Actualizar cuando cambie el prop del backend
+  useEffect(() => {
+    if (value > 0) {
+      setIvaData(prev => ({
+        ...prev,
+        iva_mes_actual: value,
+        porcentaje_cambio: percentageChange,
+        es_positivo: isPositive
+      }));
+    }
+  }, [value, percentageChange, isPositive]);
+
+  // Cargar tendencia histórica real al montar
   useEffect(() => {
     fetchIvaMensual();
   }, []);
 
-  // Actualizar datos cuando cambien los props
-  useEffect(() => {
-    setIvaData(prev => ({
-      ...prev,
-      iva_mes_actual: value,
-      porcentaje_cambio: percentageChange,
-      es_positivo: isPositive
-    }));
-  }, [value, percentageChange, isPositive]);
-  
+
   const formatValue = (val) => {
     if (val >= 1000000) {
       return `$${(val / 1000000).toFixed(1)}M`;
@@ -150,29 +149,12 @@ Gráfico: Últimos 6 meses`;
   return (
     <Box
       sx={{
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%)',
-        borderRadius: 3,
+        ...glassCardSx(theme, ACCENT),
         padding: 3,
         color: theme.palette.text.primary,
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-          : '0 4px 20px rgba(0, 0, 0, 0.08)',
-        transition: 'all 0.3s ease',
         cursor: 'pointer',
         minHeight: 180,
-        border: `1px solid ${theme.palette.mode === 'dark' 
-          ? 'rgba(147, 112, 219, 0.2)' 
-          : 'rgba(147, 112, 219, 0.1)'}`,
-        position: 'relative',
-        overflow: 'hidden',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 8px 30px rgba(0, 0, 0, 0.4)'
-            : '0 8px 30px rgba(0, 0, 0, 0.12)'
-        }
+        height: '100%',
       }}
       onClick={fetchIvaMensual}
     >
@@ -195,7 +177,7 @@ Gráfico: Últimos 6 meses`;
             }}
           >
             {title}
-            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: '#9370db' }}>🔄</Typography>}
+            {loading && <Typography component="span" sx={{ ml: 1, fontSize: '0.8rem', color: ACCENT }}>🔄</Typography>}
           </Typography>
           <Typography 
             variant="h3" 
@@ -238,9 +220,9 @@ Gráfico: Últimos 6 meses`;
           <Chip
             label={`${ivaData.es_positivo ? '+' : ''}${ivaData.porcentaje_cambio.toFixed(1)}%`}
             sx={{
-              background: theme.palette.mode === 'dark' 
-                ? 'rgba(147, 112, 219, 0.2)' 
-                : 'rgba(147, 112, 219, 0.1)',
+              background: ivaData.es_positivo
+                ? (theme.palette.mode === 'dark' ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.1)')
+                : (theme.palette.mode === 'dark' ? 'rgba(239,68,68,0.14)' : 'rgba(239,68,68,0.1)'),
               color: ivaData.es_positivo ? '#059669' : '#dc2626',
               fontWeight: 600,
               border: `1px solid ${ivaData.es_positivo ? 'rgba(5, 150, 105, 0.2)' : 'rgba(220, 38, 38, 0.2)'}`,
@@ -273,20 +255,20 @@ Gráfico: Últimos 6 meses`;
         <svg width="100%" height="40" style={{ overflow: 'visible' }}>
           <path
             d={generarPuntosGrafico()}
-            stroke="#9370db"
+            stroke={ACCENT}
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
           />
           <path
             d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
-            fill="url(#gradient)"
+            fill="url(#iva-grad)"
             opacity="0.3"
           />
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
+            <linearGradient id="iva-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.6"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.1"/>
             </linearGradient>
           </defs>
         </svg>

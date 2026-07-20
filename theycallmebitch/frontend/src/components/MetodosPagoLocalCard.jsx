@@ -6,75 +6,35 @@ const MetodosPagoLocalCard = ({
   title = 'Métodos de Pago', 
   subtitle = 'Distribución de pagos por método en el local',
   metodosPago = {},
-  totalVentas = 0
+  totalTransacciones = 0
 }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     metodosPago: [],
-    totalVentas: 0,
-    tendenciaMensual: []
+    totalTransacciones: 0
   });
 
   useEffect(() => {
-    // Usar los datos pasados como props
+    // El backend entrega un conteo de transacciones por método (sin monto por método),
+    // así que el porcentaje se calcula sobre el total de transacciones.
     if (Object.keys(metodosPago).length > 0) {
-      // Convertir a array y calcular porcentajes
-      const metodosArray = Object.entries(metodosPago).map(([metodo, datos]) => ({
-        metodo: metodo.charAt(0).toUpperCase() + metodo.slice(1),
-        cantidad: datos.cantidad,
-        monto: datos.monto,
-        porcentaje: totalVentas > 0 ? (datos.monto / totalVentas) * 100 : 0
-      })).sort((a, b) => b.monto - a.monto);
-
-      // Generar tendencia mensual simulada
-      const tendenciaMensual = [
-        { mes: 'Ene', ventas: totalVentas * 0.8 },
-        { mes: 'Feb', ventas: totalVentas * 0.85 },
-        { mes: 'Mar', ventas: totalVentas * 0.9 },
-        { mes: 'Abr', ventas: totalVentas * 0.92 },
-        { mes: 'May', ventas: totalVentas * 0.95 },
-        { mes: 'Jun', ventas: totalVentas * 0.98 },
-        { mes: 'Jul', ventas: totalVentas }
-      ];
+      const metodosArray = Object.entries(metodosPago).map(([metodo, cantidad]) => ({
+        metodo: metodo ? metodo.charAt(0).toUpperCase() + metodo.slice(1) : 'Desconocido',
+        cantidad,
+        porcentaje: totalTransacciones > 0 ? (cantidad / totalTransacciones) * 100 : 0
+      })).sort((a, b) => b.cantidad - a.cantidad);
 
       setData({
         metodosPago: metodosArray,
-        totalVentas,
-        tendenciaMensual
+        totalTransacciones
       });
     }
     setLoading(false);
-  }, [metodosPago, totalVentas]);
-
-  const formatValue = (val) => {
-    if (val >= 1000000) {
-      return `$${(val / 1000000).toFixed(1)}M`;
-    } else if (val >= 1000) {
-      return `$${(val / 1000).toFixed(1)}K`;
-    } else {
-      return `$${val.toLocaleString('es-CL')}`;
-    }
-  };
-
-  // Generar puntos del gráfico de tendencia mensual
-  const generarPuntosGrafico = () => {
-    if (!data.tendenciaMensual || data.tendenciaMensual.length === 0) {
-      return "M0 30 Q20 20 40 25 T80 15 T120 20 T160 10 T200 15";
-    }
-    
-    const puntos = data.tendenciaMensual.map((mes, index) => {
-      const x = (index / (data.tendenciaMensual.length - 1)) * 200;
-      const maxVentas = Math.max(...data.tendenciaMensual.map(m => m.ventas));
-      const y = maxVentas > 0 ? 40 - (mes.ventas / maxVentas) * 30 : 30;
-      return `${x} ${y}`;
-    });
-    
-    return `M${puntos.join(' L')}`;
-  };
+  }, [metodosPago, totalTransacciones]);
 
   const tooltipText = `Métodos de pago locales:
-Total ventas: ${formatValue(data.totalVentas)}
+Total transacciones: ${data.totalTransacciones}
 ${data.metodosPago.map(m => `${m.metodo}: ${m.porcentaje.toFixed(1)}%`).join('\n')}`;
 
   if (loading) {
@@ -193,7 +153,7 @@ ${data.metodosPago.map(m => `${m.metodo}: ${m.porcentaje.toFixed(1)}%`).join('\n
           arrow
         >
           <Chip
-            label={`${formatValue(data.totalVentas)}`}
+            label={`${data.totalTransacciones} pagos`}
             sx={{
               background: theme.palette.mode === 'dark' 
                 ? 'rgba(147, 112, 219, 0.2)' 
@@ -272,63 +232,6 @@ ${data.metodosPago.map(m => `${m.metodo}: ${m.porcentaje.toFixed(1)}%`).join('\n
             </Box>
           </Box>
         ))}
-      </Box>
-      
-      {/* Gráfico de tendencia mensual */}
-      <Box sx={{ 
-        width: '100%', 
-        height: 40, 
-        mt: 2,
-        position: 'relative'
-      }}>
-        <svg width="100%" height="40" style={{ overflow: 'visible' }}>
-          <path
-            d={generarPuntosGrafico()}
-            stroke="#9370db"
-            strokeWidth="2"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path
-            d={`${generarPuntosGrafico()} L200 40 L0 40 Z`}
-            fill="url(#gradient)"
-            opacity="0.3"
-          />
-          <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#9370db" stopOpacity="0.6"/>
-              <stop offset="100%" stopColor="#9370db" stopOpacity="0.1"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        
-        {/* Etiquetas de meses */}
-        {data.tendenciaMensual && data.tendenciaMensual.length > 0 && (
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            mt: 0.5,
-            px: 1
-          }}>
-            {data.tendenciaMensual.slice(-6).map((mes, index) => (
-              <Typography 
-                key={index}
-                variant="caption" 
-                sx={{ 
-                  fontSize: '0.75rem',
-                  color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                  fontWeight: 500,
-                  WebkitFontSmoothing: 'antialiased',
-                  MozOsxFontSmoothing: 'grayscale',
-                  textRendering: 'optimizeLegibility',
-                  fontFeatureSettings: '"liga" 1, "kern" 1'
-                }}
-              >
-                {mes.mes}
-              </Typography>
-            ))}
-          </Box>
-        )}
       </Box>
     </Box>
   );

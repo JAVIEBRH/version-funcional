@@ -6,7 +6,8 @@ const VentasSemanalesLocalCard = ({
   title = 'Ventas Semanales', 
   subtitle = 'Monto total vendido en lo que va de la semana de ventas locales',
   ventasSemanales = 0,
-  ventasSemanaAnterior = 0
+  ventasSemanaAnterior = 0,
+  tendenciaReal = []
 }) => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
@@ -24,16 +25,10 @@ const VentasSemanalesLocalCard = ({
       ? ((ventasSemanales - ventasSemanaAnterior) / ventasSemanaAnterior) * 100 
       : 0;
 
-    // Generar tendencia semanal simulada (últimos 7 días)
-    const tendenciaSemanal = [
-      { dia: 'Lun', ventas: ventasSemanales * 0.15 },
-      { dia: 'Mar', ventas: ventasSemanales * 0.12 },
-      { dia: 'Mié', ventas: ventasSemanales * 0.18 },
-      { dia: 'Jue', ventas: ventasSemanales * 0.20 },
-      { dia: 'Vie', ventas: ventasSemanales * 0.15 },
-      { dia: 'Sáb', ventas: ventasSemanales * 0.12 },
-      { dia: 'Dom', ventas: ventasSemanales * 0.08 }
-    ];
+    // Tendencia real de las últimas semanas, entregada por el backend
+    const tendenciaSemanal = tendenciaReal.length > 0
+      ? tendenciaReal.map(item => ({ dia: item.semana, ventas: item.ventas }))
+      : [];
 
     setData({
       ventasSemanales,
@@ -43,7 +38,7 @@ const VentasSemanalesLocalCard = ({
       tendenciaSemanal
     });
     setLoading(false);
-  }, [ventasSemanales, ventasSemanaAnterior]);
+  }, [ventasSemanales, ventasSemanaAnterior, tendenciaReal]);
 
   const formatValue = (val) => {
     if (val >= 1000000) {
