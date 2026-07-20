@@ -88,9 +88,18 @@ probabilidad empírica). El modelo de lenguaje decide **qué** calcular y
   `briefing_service.py`) — se elimina la contradicción Puente Alto/Chiloé.
 - **Errores estructurados**: toda ruta de chat (`/chat`, `/chat/stream`)
   envuelve fallas de OpenAI en `{"error": true, "mensaje": "..."}` en vez
-  de devolver el texto crudo de la excepción. `ChatAssistant.jsx` renderiza
-  ese caso visualmente distinto (ícono de advertencia, no burbuja normal
-  del "CEO").
+  de devolver el texto crudo de la excepción. Esto requiere corregir tres
+  puntos concretos, verificados en el código actual: (1)
+  `ai_engine.py:1020-1022`, que hoy hace `return str(e)` dentro de
+  `run_chat_query`, tragándose la excepción como si fuera una respuesta
+  válida; (2) `main.py:797`, que envuelve esa respuesta en
+  `{"response": respuesta}` sin distinguir error de respuesta real; y (3)
+  el camino de fallback no-streaming en `ChatAssistant.jsx:259`
+  (`content: data.response`), que renderiza ese campo directo sin ningún
+  chequeo — el streaming normal sí revisa `parsed.error`
+  (`ChatAssistant.jsx:227-229`), pero el fallback no. `ChatAssistant.jsx`
+  renderiza el caso de error visualmente distinto (ícono de advertencia,
+  no burbuja normal del "CEO") en los tres puntos.
 - **El botón "¿Lo ejecutaste?" funciona**: `/chat` y `/chat/stream`
   incluyen `rec_id` en el payload de respuesta/evento SSE cuando
   `guardar_recomendacion` generó uno, para que `ChatAssistant.jsx` deje de
