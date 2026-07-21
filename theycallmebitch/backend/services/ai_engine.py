@@ -374,6 +374,19 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_margin_leak_analysis",
+            "description": (
+                "Detecta zonas donde el costo real de combustible por pedido entregado es "
+                "desproporcionado respecto al ticket promedio de esa zona — usa el precio de "
+                "combustible del día, no un valor fijo. Llama cuando el usuario pregunta por "
+                "costos de reparto, rentabilidad por zona, o fuga de margen."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1110,6 +1123,24 @@ def _execute_tool(
         if name == "get_growth_opportunities":
             from services.opportunity_service import detectar_oportunidades_crecimiento
             return detectar_oportunidades_crecimiento(pedidos_cache or [])
+
+        if name == "get_margin_leak_analysis":
+            from services.margin_leak_service import detectar_fuga_margen
+            from services.zone_engine import analizar_zonas
+            from services.fuel_service import obtener_precio_bencina
+            from services.business_context import DISTANCIAS_KM
+            # analizar_zonas() no incluye distancia_km en su salida (ese campo lo
+            # calcula business_context.py a partir de DISTANCIAS_KM) — se adapta
+            # aquí antes de pasarlo a detectar_fuga_margen, que sí lo requiere.
+            zonas_raw = analizar_zonas(pedidos_cache or [])
+            zonas_data = {
+                "zonas": [
+                    {**z, "distancia_km": DISTANCIAS_KM.get(z.get("zona"))}
+                    for z in zonas_raw.get("zonas", [])
+                ]
+            }
+            precio_combustible = obtener_precio_bencina().get("precio_litro", 1200)
+            return detectar_fuga_margen(zonas_data, precio_combustible_litro=precio_combustible)
 
         return {"error": f"Tool desconocida: {name}"}
 
