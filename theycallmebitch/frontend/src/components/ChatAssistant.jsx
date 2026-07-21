@@ -4,6 +4,8 @@ import { X, Send, Brain, Zap, Cpu, Copy, Check, Trash2, Maximize2, Minimize2, Al
 
 const API = import.meta.env.VITE_API_URL || 'https://backenddashboard-vh7d.onrender.com';
 
+const DEFAULT_GREETING = 'CEO Virtual activo. Tengo acceso completo a KPIs, segmentación RFM, zonas geográficas, clima de Puente Alto y memoria histórica. Recuerdo lo que hablamos en esta sesión. ¿Qué necesitas analizar?';
+
 /* ── Scanning line ────────────────────────────────────────────────── */
 const ScanLine = () => (
   <Box sx={{
@@ -115,14 +117,35 @@ const ChatAssistant = ({ darkMode }) => {
       }
     } catch {}
     return [
-      { role: 'agent', content: 'CEO Virtual activo. Tengo acceso completo a KPIs, segmentación RFM, zonas geográficas, clima de Puente Alto y memoria histórica. Recuerdo lo que hablamos en esta sesión. ¿Qué necesitas analizar?' },
+      { role: 'agent', content: DEFAULT_GREETING },
     ];
   });
   const endRef = useRef(null);
+  const briefingLoadedRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, streamingContent]);
+
+  // Al abrir el chat por primera vez en la sesión, si no hay conversación real
+  // (solo el saludo por defecto, sin historial guardado), mostrar el briefing
+  // diario como primer mensaje del agente en vez del saludo genérico.
+  useEffect(() => {
+    if (!isOpen || briefingLoadedRef.current) return;
+    briefingLoadedRef.current = true;
+
+    const esSaludoPorDefecto = messages.length === 1 && messages[0].role === 'agent' && messages[0].content === DEFAULT_GREETING;
+    if (!esSaludoPorDefecto) return;
+
+    fetch(`${API}/briefing`)
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.briefing) {
+          setMessages([{ role: 'agent', content: d.briefing }]);
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]); // eslint-disable-line
 
   // Persistir historial en localStorage (últimos 30 mensajes)
   useEffect(() => {

@@ -14,7 +14,6 @@ import BidonesCard from '../components/BidonesCard';
 import IvaCard from '../components/IvaCard';
 import CostosCard from '../components/CostosCard';
 import UtilidadesCard from '../components/UtilidadesCard';
-import InsightsPanel from '../components/InsightsPanel';
 import TiltCard from '../components/TiltCard';
 import { getKpis, getPedidos, getVentasHistoricas, getVentasTotalesHistoricas } from '../services/api';
 import './Home.css';
@@ -724,11 +723,6 @@ export default function Home() {
                 title="Pedidos por Horario"
               />
             </TiltCard>
-          </Box>
-
-          {/* Fila 5: Operador Inteligente AI */}
-          <Box>
-            <InsightsPanel darkMode={theme.palette.mode === 'dark'} />
           </Box>
         </Box>
       </Box>
