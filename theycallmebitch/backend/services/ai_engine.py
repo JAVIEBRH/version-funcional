@@ -912,21 +912,19 @@ def _execute_tool(
 
         if name == "get_daily_cashflow":
             try:
-                import requests as _req
-                base = os.getenv("INTERNAL_API_URL", "http://localhost:8000")
-                r = _req.get(f"{base}/ventas-diarias", timeout=5)
-                return r.json() if r.ok else {"error": "No se pudo obtener ventas diarias"}
+                from main import get_ventas_diarias
+                return get_ventas_diarias()
             except Exception as e:
-                return {"error": str(e)}
+                logger.error(f"Error en get_daily_cashflow: {e}")
+                return {"error": "No se pudo obtener ventas diarias"}
 
         if name == "get_inventory":
             try:
-                import requests as _req
-                base = os.getenv("INTERNAL_API_URL", "http://localhost:8000")
-                r = _req.get(f"{base}/inventario/estado", timeout=5)
-                return r.json() if r.ok else {"error": "Inventario no disponible"}
+                from main import get_estado_inventario
+                return get_estado_inventario()
             except Exception as e:
-                return {"error": str(e)}
+                logger.error(f"Error en get_inventory: {e}")
+                return {"error": "Inventario no disponible"}
 
         if name == "simulate_scenario":
             return simulate_scenario(args["action"], args.get("params", {}), context_data)
