@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Box, Typography, TextField, IconButton, CircularProgress } from '@mui/material';
-import { X, Send, Brain, Zap, Cpu, Copy, Check, Trash2, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Send, Brain, Zap, Cpu, Copy, Check, Trash2, Maximize2, Minimize2, AlertTriangle } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || 'https://backenddashboard-vh7d.onrender.com';
 
@@ -194,6 +194,7 @@ const ChatAssistant = ({ darkMode }) => {
       let toolsActivated = [];
       let isCampaign    = false;
       let recId         = null;
+      let streamError   = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -226,6 +227,7 @@ const ChatAssistant = ({ darkMode }) => {
             }
             if (parsed.error) {
               accumulated = 'Error de conexión con el servicio estratégico.';
+              streamError = true;
             }
           } catch {}
         }
@@ -238,6 +240,7 @@ const ChatAssistant = ({ darkMode }) => {
         isCampaign: isCampaign,
         toolsUsed:  toolsActivated,
         recId:      recId,
+        isError:    streamError,
       }]);
       setStreaming('');
       setActiveTools([]);
@@ -256,9 +259,14 @@ const ChatAssistant = ({ darkMode }) => {
           body: JSON.stringify({ message: msg, history: currentHistory }),
         });
         const data = await res2.json();
-        setMessages(prev => [...prev, { role: 'agent', content: data.response }]);
+        const esError = data.response && typeof data.response === 'object' && data.response.error;
+        setMessages(prev => [...prev, {
+          role: 'agent',
+          content: esError ? data.response.mensaje : data.response,
+          isError: !!esError,
+        }]);
       } catch {
-        setMessages(prev => [...prev, { role: 'agent', content: 'Error de conexión con el servicio estratégico.' }]);
+        setMessages(prev => [...prev, { role: 'agent', content: 'Error de conexión con el servicio estratégico.', isError: true }]);
       }
       setStreaming('');
       setActiveTools([]);
@@ -478,9 +486,11 @@ const ChatAssistant = ({ darkMode }) => {
           }}>
             {m.role === 'agent' && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 0.75 }}>
-                <Cpu size={10} color="#06b6d4" />
-                <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: '#06b6d4', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
-                  CEO · IA
+                {m.isError
+                  ? <AlertTriangle size={10} color="#f59e0b" />
+                  : <Cpu size={10} color="#06b6d4" />}
+                <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: m.isError ? '#f59e0b' : '#06b6d4', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' }}>
+                  {m.isError ? 'CEO · IA · Error' : 'CEO · IA'}
                 </Typography>
                 {m.toolsUsed?.length > 0 && (
                   <Box sx={{ display: 'flex', gap: 0.4, ml: 0.5 }}>
@@ -505,13 +515,15 @@ const ChatAssistant = ({ darkMode }) => {
               borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
               background: m.role === 'user'
                 ? 'linear-gradient(135deg, #0891b2 0%, #06b6d4 50%, #0ea5e9 100%)'
-                : 'rgba(255,255,255,0.04)',
-              border: m.role === 'user' ? 'none' : '1px solid rgba(6,182,212,0.12)',
+                : m.isError ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.04)',
+              border: m.role === 'user'
+                ? 'none'
+                : m.isError ? '1px solid rgba(245,158,11,0.3)' : '1px solid rgba(6,182,212,0.12)',
               boxShadow: m.role === 'user'
                 ? '0 4px 16px rgba(6,182,212,0.3), inset 0 1px 0 rgba(255,255,255,0.15)'
                 : '0 2px 8px rgba(0,0,0,0.2)',
-              color: m.role === 'user' ? '#fff' : '#cbd5e1',
-              ...(m.role === 'agent' && { borderLeft: '2px solid rgba(6,182,212,0.4)' }),
+              color: m.role === 'user' ? '#fff' : m.isError ? '#fbbf24' : '#cbd5e1',
+              ...(m.role === 'agent' && { borderLeft: `2px solid ${m.isError ? 'rgba(245,158,11,0.6)' : 'rgba(6,182,212,0.4)'}` }),
             }}>
               <MsgContent content={m.content} isUser={m.role === 'user'} />
             </Box>

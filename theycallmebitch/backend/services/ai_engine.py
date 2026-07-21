@@ -8,6 +8,7 @@ import json
 import hashlib
 import logging
 from math import ceil
+from typing import Union
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -967,8 +968,13 @@ def run_chat_query(
     question: str,
     history: list = None,
     pedidos_cache: list = None,
-) -> str:
-    """Chat con function calling. Retorna respuesta markdown como string."""
+) -> Union[str, dict]:
+    """Chat con function calling. Retorna respuesta markdown como string.
+
+    En caso de fallo de OpenAI (rate limit, timeout, etc.) retorna en su lugar
+    un dict estructurado `{"error": True, "mensaje": "..."}` con un mensaje
+    genérico y seguro para mostrar al usuario, en vez de la excepción cruda.
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return "El Agente no está configurado (API Key faltante)."
@@ -1017,7 +1023,7 @@ def run_chat_query(
             )
         except Exception as e:
             logger.error(f"Error OpenAI en chat: {e}")
-            return str(e)
+            return {"error": True, "mensaje": "No pude conectarme con el servicio de análisis. Intenta de nuevo en un momento."}
 
         choice = response.choices[0]
 

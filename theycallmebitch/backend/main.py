@@ -797,7 +797,7 @@ def chat_with_agent(req: ChatRequest):
         return {"response": respuesta}
     except Exception as e:
         logger.error(f"Error en /chat: {e}")
-        return {"response": f"Error procesando consulta: {str(e)}"}
+        return {"response": {"error": True, "mensaje": "No pude procesar tu consulta. Intenta de nuevo."}}
 
 
 @app.post("/chat/stream")
