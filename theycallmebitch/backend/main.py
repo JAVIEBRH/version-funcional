@@ -729,6 +729,16 @@ def _build_full_context():
     return ctx
 
 
+def _decidir_si_generar_insight(pedidos: list, generar_insight_fn, context: dict) -> list:
+    """Solo llama a OpenAI (generar_insight_fn) si anomaly_detection_service
+    encuentra una desviación real — evita el costo de una llamada incondicional."""
+    from services.anomaly_detection_service import detectar_anomalias
+    anomalias = detectar_anomalias(pedidos)
+    if not anomalias:
+        return []
+    return generar_insight_fn(context)
+
+
 async def ai_autonomous_loop():
     """Background task CEO autónomo con contexto completo."""
     logger.info("AI CEO Modo Dios inicializado")
@@ -736,7 +746,8 @@ async def ai_autonomous_loop():
     # Primera pasada inmediata
     try:
         context = _build_full_context()
-        nuevas_alertas = run_autonomous_insight(context)
+        pedidos = data_adapter.obtener_pedidos_combinados()
+        nuevas_alertas = _decidir_si_generar_insight(pedidos, run_autonomous_insight, context)
         if nuevas_alertas:
             global GLOBAL_INSIGHTS
             GLOBAL_INSIGHTS = nuevas_alertas
@@ -751,7 +762,8 @@ async def ai_autonomous_loop():
             # 15 minutos — balance costo/frescura
             await asyncio.sleep(900)
             context = _build_full_context()
-            nuevas_alertas = run_autonomous_insight(context)
+            pedidos = data_adapter.obtener_pedidos_combinados()
+            nuevas_alertas = _decidir_si_generar_insight(pedidos, run_autonomous_insight, context)
             if nuevas_alertas:
                 GLOBAL_INSIGHTS = (nuevas_alertas + GLOBAL_INSIGHTS)[:8]
                 for insight in nuevas_alertas:
