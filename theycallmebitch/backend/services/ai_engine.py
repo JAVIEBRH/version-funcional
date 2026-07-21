@@ -29,6 +29,7 @@ _kpi_hash_cache: str = ""
 NO_CACHE_TOOLS = {
     "simulate_scenario", "draft_campaign_message",
     "analyze_campaign", "recommend_expansion", "get_daily_cashflow",
+    "web_search", "get_demand_forecast",
 }
 
 # ─── Definición de herramientas (OpenAI function calling) ─────────────────────
@@ -617,15 +618,20 @@ _WA_TEMPLATES = {
 
 # ─── Clasificación de intento ─────────────────────────────────────────────────
 _INTENT_TOOLS = {
-    "zone":       ["get_zone_analysis"],
-    "rfm":        ["get_customer_segments", "draft_campaign_message"],
+    "zone":       ["get_zone_analysis", "get_route_intelligence"],
+    "rfm":        [
+        "get_customer_segments", "draft_campaign_message",
+        "get_customer_risk", "get_activation_rate",
+        "get_seasonal_churn_classification", "get_growth_opportunities",
+        "get_payment_risk_analysis",
+    ],
     "simulation": ["simulate_scenario", "get_kpis"],
     "campaign":   ["get_customer_segments", "analyze_campaign", "draft_campaign_message"],
-    "financial":  ["get_kpis", "simulate_scenario"],
+    "financial":  ["get_kpis", "simulate_scenario", "get_rentabilidad_reportes", "get_margin_leak_analysis"],
     "trends":     ["get_trends"],
     "daily":      ["get_daily_cashflow", "get_kpis"],
-    "inventory":  ["get_inventory", "get_kpis"],
-    "expansion":  ["recommend_expansion", "get_kpis", "get_zone_analysis"],
+    "inventory":  ["get_inventory", "get_kpis", "get_demand_forecast"],
+    "expansion":  ["recommend_expansion", "get_kpis", "get_zone_analysis", "get_channel_comparison"],
 }
 
 
