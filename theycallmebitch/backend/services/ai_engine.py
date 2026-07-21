@@ -163,8 +163,13 @@ TOOLS = [
                             "increase_frequency",
                             "price_change",
                             "capacity_expansion",
+                            "compound",
                         ],
-                        "description": "La acción a simular.",
+                        "description": (
+                            "La acción a simular. Usa 'compound' para combinar varias "
+                            "acciones en un solo escenario multi-variable (ej. reactivar "
+                            "clientes Y subir frecuencia al mismo tiempo)."
+                        ),
                     },
                     "params": {
                         "type": "object",
@@ -174,7 +179,13 @@ TOOLS = [
                             "add_zone: {zone_name, distance_km, target_orders_month}. "
                             "increase_frequency: {extra_orders_per_client, affected_clients}. "
                             "price_change: {new_price}. "
-                            "capacity_expansion: {new_capacity_bidones, monthly_fixed_cost_increase}."
+                            "capacity_expansion: {new_capacity_bidones, monthly_fixed_cost_increase}. "
+                            "compound: {escenarios: [{action, params}, ...]} — lista de "
+                            "sub-escenarios, cada uno con la misma forma {action, params} que "
+                            "usarías para llamar a simulate_scenario individualmente (action "
+                            "cualquiera de las anteriores, excepto 'compound'). El resultado "
+                            "trae 'desglose' (resultado completo de cada sub-escenario) e "
+                            "'impacto_total' (suma del impacto económico mensual de cada uno)."
                         ),
                     },
                 },
@@ -710,10 +721,76 @@ def _compress_if_needed(conversation: list, client: OpenAI) -> list:
         return [system_msg] + conversation[-8:]
 
 
+# Campo que cada acción individual usa para reportar su impacto económico
+# mensual. No son directamente equivalentes en naturaleza (algunas son
+# revenue bruto, otras ya son utilidad neta descontando costos) — por eso
+# el desglose de "compound" siempre expone qué campo se usó por escenario,
+# en vez de sumar campos a ciegas:
+#   reactivate_clients   -> revenue_mensual_recuperado (revenue bruto)
+#   add_zone              -> utilidad_neta_zona (ya neto de combustible/chofer)
+#   increase_frequency    -> revenue_extra_mensual (revenue bruto)
+#   price_change          -> delta_revenue_mensual (revenue bruto, delta vs actual;
+#                             ausente si "datos_insuficientes")
+#   capacity_expansion    -> uplift_revenue_si_ocupas_todo (revenue bruto potencial)
+_IMPACT_FIELD_BY_ACTION = {
+    "reactivate_clients": "revenue_mensual_recuperado",
+    "add_zone": "utilidad_neta_zona",
+    "increase_frequency": "revenue_extra_mensual",
+    "price_change": "delta_revenue_mensual",
+    "capacity_expansion": "uplift_revenue_si_ocupas_todo",
+}
+
+
 # ─── Simulador financiero (puro Python, sin IA) ───────────────────────────────
 def simulate_scenario(action: str, params: dict, context_data: dict) -> dict:
     ctx = context_data
     ticket = ctx.get("ticket_promedio", PRECIO_BIDON)
+
+    if action == "compound":
+        escenarios = params.get("escenarios", [])
+        desglose = []
+        advertencias = []
+        impacto_total = 0
+
+        for esc in escenarios:
+            sub_action = esc.get("action")
+            sub_params = esc.get("params", {})
+            sub_resultado = simulate_scenario(sub_action, sub_params, context_data)
+
+            campo_impacto = _IMPACT_FIELD_BY_ACTION.get(sub_action)
+            impacto = sub_resultado.get(campo_impacto) if campo_impacto else None
+
+            if impacto is None:
+                advertencias.append(
+                    f"'{sub_action}' no aportó un monto de impacto sumable "
+                    f"(sin datos suficientes o acción no reconocida) y no se incluyó en el total."
+                )
+            else:
+                impacto_total += impacto
+
+            desglose.append({
+                "action": sub_action,
+                "params": sub_params,
+                "resultado": sub_resultado,
+                "campo_impacto_usado": campo_impacto,
+                "impacto": impacto,
+            })
+
+        impacto_total = round(impacto_total)
+        return {
+            "desglose": desglose,
+            "cantidad_escenarios": len(desglose),
+            "impacto_total": impacto_total,
+            "advertencias": advertencias,
+            "interpretacion": (
+                f"Escenario compuesto de {len(desglose)} sub-escenario(s): impacto económico "
+                f"mensual combinado estimado ${impacto_total:,.0f} CLP. "
+                "Nota: los campos sumados no son todos de la misma naturaleza "
+                "(algunos son revenue bruto, otros utilidad neta) — revisa 'desglose' "
+                "para ver el detalle y el campo usado por cada sub-escenario."
+                + (" " + " ".join(advertencias) if advertencias else "")
+            ),
+        }
 
     if action == "reactivate_clients":
         en_riesgo   = ctx.get("clientes_en_riesgo_count", 0)

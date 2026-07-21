@@ -226,3 +226,50 @@ def test_simulate_scenario_price_change_usa_elasticidad_real_calculada():
     assert resultado["elasticidad_estimada"] is not None
     assert "bidones_proyectados" in resultado
     assert "elasticidad real" in resultado["interpretacion"].lower()
+
+
+def test_simulate_scenario_compuesto_suma_impactos():
+    """'compound' debe correr cada sub-escenario reusando simulate_scenario
+    recursivamente (misma firma de 3 parámetros), devolver un desglose con
+    un resultado por sub-escenario, y sumar el campo de impacto económico
+    mensual real de cada uno (revenue_mensual_recuperado para
+    reactivate_clients, revenue_extra_mensual para increase_frequency) en
+    impacto_total."""
+    context = {
+        "ventas_mensuales": 1000000,
+        "pedidos_mensuales": 200,
+        "clientes_en_riesgo_count": 50,
+        "revenue_en_riesgo": 500000,
+        "total_bidones_mes": 300,
+    }
+    resultado = simulate_scenario("compound", {
+        "escenarios": [
+            {"action": "reactivate_clients", "params": {"pct_reactivated": 0.2}},
+            {"action": "increase_frequency", "params": {"extra_orders_per_client": 1, "affected_clients": 10}},
+        ]
+    }, context)
+
+    assert "desglose" in resultado
+    assert len(resultado["desglose"]) == 2
+    assert "impacto_total" in resultado
+
+    # Verificar que el desglose reutiliza los resultados reales de cada acción individual.
+    esperado_reactivar = simulate_scenario(
+        "reactivate_clients", {"pct_reactivated": 0.2}, context
+    )
+    esperado_frecuencia = simulate_scenario(
+        "increase_frequency",
+        {"extra_orders_per_client": 1, "affected_clients": 10},
+        context,
+    )
+    impacto_esperado = (
+        esperado_reactivar["revenue_mensual_recuperado"]
+        + esperado_frecuencia["revenue_extra_mensual"]
+    )
+    assert resultado["impacto_total"] == impacto_esperado
+    assert resultado["desglose"][0]["resultado"]["revenue_mensual_recuperado"] == (
+        esperado_reactivar["revenue_mensual_recuperado"]
+    )
+    assert resultado["desglose"][1]["resultado"]["revenue_extra_mensual"] == (
+        esperado_frecuencia["revenue_extra_mensual"]
+    )
