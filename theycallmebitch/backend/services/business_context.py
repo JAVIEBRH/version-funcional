@@ -3,6 +3,9 @@ from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
+# Ubicación única del negocio — usada por todos los prompts de IA
+UBICACION_EMPRESA = "Lago La Paloma 4565, Villa El Alba, Puente Alto, Santiago, Chile"
+
 # Distancias aproximadas desde el local (Lago La Paloma 4565, Villa El Alba, Puente Alto)
 # hasta cada zona de reparto activa.
 DISTANCIAS_KM = {

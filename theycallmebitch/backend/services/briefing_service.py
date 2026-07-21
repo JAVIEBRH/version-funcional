@@ -8,10 +8,11 @@ import logging
 from datetime import datetime
 from openai import OpenAI
 from typing import Dict
+from services.business_context import UBICACION_EMPRESA
 
 logger = logging.getLogger(__name__)
 
-BRIEFING_PROMPT = """Eres el CEO/COO virtual de Aguas Ancud (Chiloé, Chile).
+BRIEFING_PROMPT = f"""Eres el CEO/COO virtual de Aguas Ancud ({UBICACION_EMPRESA}).
 Empresa de agua purificada en bidones de 20L.
 
 Con los datos del reporte diario que te entrego, genera un BRIEFING EJECUTIVO MATUTINO.

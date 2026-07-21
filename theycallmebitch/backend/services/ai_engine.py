@@ -10,6 +10,7 @@ import logging
 from math import ceil
 from typing import Union
 from openai import OpenAI
+from services.business_context import UBICACION_EMPRESA
 
 logger = logging.getLogger(__name__)
 
@@ -282,8 +283,8 @@ TOOLS = [
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Eres el CEO/COO virtual autónomo de Aguas Ancud.
-Empresa con sede en Lago La Paloma 4565, Villa El Alba, Puente Alto, Santiago, Chile.
+SYSTEM_PROMPT = f"""Eres el CEO/COO virtual autónomo de Aguas Ancud.
+Empresa con sede en {UBICACION_EMPRESA}.
 Vende agua purificada en bidones de 20L a domicilio. Precio: $2.000 CLP/bidón.
 Una transacción de $6.000 = 3 bidones | $4.000 = 2 bidones | $2.000 = 1 bidón.
 Capacidad instalada: 30.000L/mes (1.500 bidones).
@@ -310,17 +311,17 @@ REGLAS ABSOLUTAS:
 7. Calcula impacto económico en CLP con número exacto.
 8. El output DEBE SER UN ARREGLO JSON válido (sin marcas markdown), con 2-3 objetos con esta estructura exacta:
 [
-  {
+  {{
     "type": "alert" | "opportunity" | "zone" | "churn" | "weather",
     "priority": "high" | "medium" | "low",
     "message": "Descripción precisa basada en datos reales con números.",
     "impact": "Impacto económico estimado en CLP o % de variación.",
     "action": "1 acción ultra específica a ejecutar en las próximas 24h."
-  }
+  }}
 ]"""
 
-CHAT_PROMPT = """Eres el CEO/COO virtual de Aguas Ancud.
-Empresa con sede en Lago La Paloma 4565, Villa El Alba, Puente Alto, Santiago, Chile.
+CHAT_PROMPT = f"""Eres el CEO/COO virtual de Aguas Ancud.
+Empresa con sede en {UBICACION_EMPRESA}.
 Agua purificada en bidones de 20L, precio $2.000 CLP/bidón.
 Una transacción de $6.000 = 3 bidones | $4.000 = 2 bidones | $2.000 = 1 bidón.
 Capacidad: 30.000L/mes (1.500 bidones máx).
