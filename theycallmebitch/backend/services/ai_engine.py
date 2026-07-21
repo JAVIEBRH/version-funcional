@@ -423,6 +423,19 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_activation_rate",
+            "description": (
+                "De los clientes nuevos, qué porcentaje real hace una segunda compra y en "
+                "cuánto tiempo — diagnóstico de conversión del primer pedido, distinto de "
+                "churn. Llama cuando el usuario pregunta por activación de clientes nuevos, "
+                "conversión, o por qué los clientes nuevos no vuelven."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1189,6 +1202,10 @@ def _execute_tool(
         if name == "get_sla_compliance":
             from services.sla_compliance_service import calcular_cumplimiento_horario
             return calcular_cumplimiento_horario(pedidos_cache or [])
+
+        if name == "get_activation_rate":
+            from services.activation_service import calcular_tasa_activacion
+            return calcular_tasa_activacion(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
