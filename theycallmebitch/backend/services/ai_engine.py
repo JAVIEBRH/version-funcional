@@ -280,6 +280,20 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_customer_risk",
+            "description": (
+                "Riesgo de clientes basado en la cadencia PERSONAL de compra de cada uno "
+                "(no un umbral genérico) y probabilidad empírica real de reorden. Más preciso "
+                "que get_customer_segments para decidir a quién contactar primero. Llama cuando "
+                "el usuario pregunta específicamente por priorización de contacto, valor en "
+                "juego, o quiere saber qué tan urgente es contactar a un cliente."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -955,6 +969,10 @@ def _execute_tool(
                 volumen_mensual_objetivo=int(args.get("volumen_mensual_objetivo", 40)),
                 context_data=context_data,
             )
+
+        if name == "get_customer_risk":
+            from services.customer_risk_service import calcular_riesgo_clientes
+            return calcular_riesgo_clientes(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 

@@ -154,3 +154,10 @@ def test_run_chat_query_prepare_devuelve_tupla_de_3_con_rec_id():
         assert "draft_campaign_message" in tools_used
         assert rec_id == 99
         assert isinstance(conversation, list)
+
+
+def test_get_customer_risk_devuelve_estructura_real():
+    resultado = _execute_tool("get_customer_risk", {}, [], {})
+    assert "resumen" in resultado
+    assert "clientes" in resultado
+    assert set(resultado["resumen"].keys()) == {"activos", "en_riesgo", "inactivos"}
