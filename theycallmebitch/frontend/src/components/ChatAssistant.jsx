@@ -1,8 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography, TextField, IconButton, CircularProgress } from '@mui/material';
+import { Box, Typography, TextField, IconButton, CircularProgress, Badge } from '@mui/material';
 import { X, Send, Brain, Zap, Cpu, Copy, Check, Trash2, Maximize2, Minimize2, AlertTriangle } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || 'https://backenddashboard-vh7d.onrender.com';
+
+// Clave de localStorage donde guardamos el "snapshot" de insights ya vistos
+// por el usuario (comparación por contenido, /insights no trae ids/timestamps).
+const SEEN_INSIGHTS_KEY = 'ceo_chat_seen_insights';
+// Intervalo de sondeo de /insights para el badge de notificación (no dispara IA,
+// solo lee GLOBAL_INSIGHTS que el loop autónomo ya generó).
+const INSIGHTS_POLL_MS = 60000;
 
 const DEFAULT_GREETING = 'CEO Virtual activo. Tengo acceso completo a KPIs, segmentación RFM, zonas geográficas, clima de Puente Alto y memoria histórica. Recuerdo lo que hablamos en esta sesión. ¿Qué necesitas analizar?';
 
@@ -120,8 +127,10 @@ const ChatAssistant = ({ darkMode }) => {
       { role: 'agent', content: DEFAULT_GREETING },
     ];
   });
+  const [newInsightsCount, setNewInsightsCount] = useState(0);
   const endRef = useRef(null);
   const briefingLoadedRef = useRef(false);
+  const latestInsightsRef = useRef([]);
 
   useEffect(() => {
     if (isOpen) endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -146,6 +155,49 @@ const ChatAssistant = ({ darkMode }) => {
       })
       .catch(() => {});
   }, [isOpen]); // eslint-disable-line
+
+  // Sondear /insights (GLOBAL_INSIGHTS) para el badge del ícono flotante.
+  // /insights ya expone la lista completa de insights generados por el loop
+  // autónomo (gated ahora tras anomaly_detection_service), pero no trae ids ni
+  // timestamps — comparamos por contenido contra el último snapshot "visto".
+  useEffect(() => {
+    const checkInsights = async () => {
+      try {
+        const res = await fetch(`${API}/insights`);
+        const data = await res.json();
+        const insights = Array.isArray(data) ? data : [];
+        latestInsightsRef.current = insights;
+
+        if (insights.length === 0) {
+          setNewInsightsCount(0);
+          return;
+        }
+
+        let lastSeen = '';
+        try { lastSeen = localStorage.getItem(SEEN_INSIGHTS_KEY) || ''; } catch {}
+        const currentSnapshot = JSON.stringify(insights);
+
+        if (currentSnapshot !== lastSeen && !isOpen) {
+          setNewInsightsCount(insights.length);
+        } else if (currentSnapshot === lastSeen) {
+          setNewInsightsCount(0);
+        }
+      } catch {}
+    };
+
+    checkInsights();
+    const interval = setInterval(checkInsights, INSIGHTS_POLL_MS);
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
+  // Al abrir el chat, marcar los insights actuales como "vistos" y limpiar el badge.
+  useEffect(() => {
+    if (!isOpen) return;
+    setNewInsightsCount(0);
+    try {
+      localStorage.setItem(SEEN_INSIGHTS_KEY, JSON.stringify(latestInsightsRef.current));
+    } catch {}
+  }, [isOpen]);
 
   // Persistir historial en localStorage (últimos 30 mensajes)
   useEffect(() => {
@@ -307,35 +359,54 @@ const ChatAssistant = ({ darkMode }) => {
 
   /* ── Floating button ──────────────────────────────────────────── */
   if (!isOpen) return (
-    <Box onClick={() => setIsOpen(true)} sx={{
-      position: 'fixed', bottom: 28, right: 28,
-      width: 58, height: 58, borderRadius: '50%',
-      cursor: 'pointer', zIndex: 9999,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #06b6d4 0%, #0d9488 100%)',
-      boxShadow: '0 0 0 1px rgba(6,182,212,0.35), 0 8px 32px rgba(6,182,212,0.3), 0 4px 12px rgba(0,0,0,0.4)',
-      transition: 'transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease',
-      '&:hover': {
-        transform: 'scale(1.12)',
-        boxShadow: '0 0 0 2px rgba(6,182,212,0.5), 0 12px 40px rgba(6,182,212,0.4), 0 4px 16px rgba(0,0,0,0.5)',
-      },
-      '&::before': {
-        content: '""', position: 'absolute', inset: -5, borderRadius: '50%',
-        border: '1.5px solid rgba(6,182,212,0.35)',
-        animation: 'pulseRing 2.8s ease-out infinite',
-        '@keyframes pulseRing': {
-          '0%':   { transform: 'scale(1)',   opacity: 0.7 },
-          '100%': { transform: 'scale(1.6)', opacity: 0   },
+    <Badge
+      badgeContent={newInsightsCount}
+      max={9}
+      overlap="circular"
+      sx={{
+        position: 'fixed', bottom: 28, right: 28, zIndex: 9999,
+        '& .MuiBadge-badge': {
+          bgcolor: '#f59e0b', color: '#020814', fontWeight: 800,
+          fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+          boxShadow: '0 0 0 2px rgba(4,10,20,0.98), 0 2px 8px rgba(245,158,11,0.5)',
+          animation: newInsightsCount > 0 ? 'badgePulse 1.6s ease-in-out infinite' : 'none',
+          '@keyframes badgePulse': {
+            '0%,100%': { transform: 'scale(1)' },
+            '50%':     { transform: 'scale(1.15)' },
+          },
         },
-      },
-      '&::after': {
-        content: '""', position: 'absolute', inset: -10, borderRadius: '50%',
-        border: '1px solid rgba(13,148,136,0.2)',
-        animation: 'pulseRing 2.8s ease-out infinite 0.8s',
-      },
-    }}>
-      <Brain size={23} color="#020814" strokeWidth={2.4} />
-    </Box>
+      }}
+    >
+      <Box onClick={() => setIsOpen(true)} sx={{
+        position: 'relative',
+        width: 58, height: 58, borderRadius: '50%',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'linear-gradient(135deg, #06b6d4 0%, #0d9488 100%)',
+        boxShadow: '0 0 0 1px rgba(6,182,212,0.35), 0 8px 32px rgba(6,182,212,0.3), 0 4px 12px rgba(0,0,0,0.4)',
+        transition: 'transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease',
+        '&:hover': {
+          transform: 'scale(1.12)',
+          boxShadow: '0 0 0 2px rgba(6,182,212,0.5), 0 12px 40px rgba(6,182,212,0.4), 0 4px 16px rgba(0,0,0,0.5)',
+        },
+        '&::before': {
+          content: '""', position: 'absolute', inset: -5, borderRadius: '50%',
+          border: '1.5px solid rgba(6,182,212,0.35)',
+          animation: 'pulseRing 2.8s ease-out infinite',
+          '@keyframes pulseRing': {
+            '0%':   { transform: 'scale(1)',   opacity: 0.7 },
+            '100%': { transform: 'scale(1.6)', opacity: 0   },
+          },
+        },
+        '&::after': {
+          content: '""', position: 'absolute', inset: -10, borderRadius: '50%',
+          border: '1px solid rgba(13,148,136,0.2)',
+          animation: 'pulseRing 2.8s ease-out infinite 0.8s',
+        },
+      }}>
+        <Brain size={23} color="#020814" strokeWidth={2.4} />
+      </Box>
+    </Badge>
   );
 
   /* ── Open panel ───────────────────────────────────────────────── */
