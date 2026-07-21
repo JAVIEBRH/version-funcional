@@ -399,6 +399,18 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_channel_comparison",
+            "description": (
+                "Compara ventas de Local (mostrador) vs Delivery, últimos 30 días vs los 30 "
+                "anteriores en cada canal. Llama cuando el usuario pregunta si el local está "
+                "compensando el delivery, o quiere comparar canales de venta."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1157,6 +1169,10 @@ def _execute_tool(
         if name == "get_payment_risk_analysis":
             from services.payment_risk_service import analizar_riesgo_pago
             return analizar_riesgo_pago(pedidos_cache or [])
+
+        if name == "get_channel_comparison":
+            from services.channel_comparison_service import comparar_canales
+            return comparar_canales(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
