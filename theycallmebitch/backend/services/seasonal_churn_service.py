@@ -36,18 +36,21 @@ def _es_patron_estacional(fechas: list) -> bool:
     anos = set(f.year for f in fechas)
     if len(anos) < MIN_ANOS_HISTORIAL:
         return False
-    # Para cada trimestre, contar cuántos años tienen actividad en ese trimestre.
-    # Si algún trimestre tiene actividad en 2+ años, significa que el cliente
-    # compra en esa época todos los años — es estacional.
-    trimestres_anos = {}
+    # Solo se consideran los dos años más recientes del historial del cliente.
+    # Un trimestre es "estacional" únicamente si está activo en AMBOS de esos
+    # dos años — no basta con que coincida en dos años cualesquiera de un
+    # historial largo (eso produciría falsos positivos por pura coincidencia).
+    dos_anos_recientes = sorted(anos)[-2:]
+    ano_anterior, ano_reciente = dos_anos_recientes[0], dos_anos_recientes[1]
+
+    trimestres_por_ano = {ano_anterior: set(), ano_reciente: set()}
     for f in fechas:
-        trimestre = (f.month - 1) // 3  # trimestre 0-3
-        trimestres_anos.setdefault(trimestre, set()).add(f.year)
-    # Si algún trimestre aparece en 2+ años diferentes, es estacional
-    for years in trimestres_anos.values():
-        if len(years) >= MIN_ANOS_HISTORIAL:
-            return True
-    return False
+        if f.year in trimestres_por_ano:
+            trimestre = (f.month - 1) // 3  # trimestre 0-3
+            trimestres_por_ano[f.year].add(trimestre)
+
+    interseccion = trimestres_por_ano[ano_anterior] & trimestres_por_ano[ano_reciente]
+    return len(interseccion) > 0
 
 
 def clasificar_churn_estacional(pedidos: List[Dict], clientes_inactivos: List[Dict]) -> Dict:
