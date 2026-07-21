@@ -460,6 +460,23 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Busca información real y actual en internet — precios de competencia, "
+                "noticias económicas locales, o cualquier dato externo que no exista en los "
+                "datos propios del negocio. Llama SOLO cuando la pregunta requiere información "
+                "que no está en ninguna otra tool disponible."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "Consulta de búsqueda."}},
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1120,6 +1137,48 @@ def recommend_expansion(
 
 
 # ─── Dispatcher de tools ──────────────────────────────────────────────────────
+def _buscar_web(query: str) -> dict:
+    """Busca en internet vía la Responses API de OpenAI con la tool nativa
+    `web_search` (no la API de Chat Completions usada por el resto del loop
+    de function calling — son dos endpoints distintos, `client.responses.create`
+    vs `client.chat.completions.create`, y esta llamada es autocontenida: no
+    participa del historial de mensajes de la conversación principal).
+
+    Devuelve `{"resultado": "<texto>", "fuentes": [<urls citadas>]}` en éxito,
+    o `{"error": "..."}` si falla la conexión o no hay resultados — mismo
+    patrón que las demás tools en `_execute_tool`.
+    """
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"error": "OPENAI_API_KEY no configurada"}
+
+        client = OpenAI(api_key=api_key)
+        response = client.responses.create(
+            model="gpt-4o-mini",
+            tools=[{"type": "web_search"}],
+            input=query,
+        )
+
+        texto = (response.output_text or "").strip()
+        if not texto:
+            return {"error": "La búsqueda no devolvió resultados"}
+
+        fuentes = []
+        for item in getattr(response, "output", []) or []:
+            for content in getattr(item, "content", []) or []:
+                for anotacion in getattr(content, "annotations", []) or []:
+                    url = getattr(anotacion, "url", None)
+                    if url and url not in fuentes:
+                        fuentes.append(url)
+
+        return {"resultado": texto, "fuentes": fuentes}
+
+    except Exception as e:
+        logger.error(f"Error en _buscar_web: {e}")
+        return {"error": str(e)}
+
+
 def _execute_tool(
     name: str,
     args: dict,
@@ -1303,6 +1362,9 @@ def _execute_tool(
             riesgo = calcular_riesgo_clientes(pedidos_cache or [])
             inactivos = [c for c in riesgo.get("clientes", []) if c.get("estado") == "inactivo"]
             return clasificar_churn_estacional(pedidos_cache or [], inactivos)
+
+        if name == "web_search":
+            return _buscar_web(args.get("query", ""))
 
         return {"error": f"Tool desconocida: {name}"}
 

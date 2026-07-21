@@ -159,6 +159,16 @@ def test_run_chat_query_prepare_devuelve_tupla_de_3_con_rec_id():
         assert isinstance(conversation, list)
 
 
+def test_web_search_tool_devuelve_resultado_estructurado():
+    from services.ai_engine import _execute_tool
+    with patch("services.ai_engine._buscar_web") as mock_buscar:
+        mock_buscar.return_value = {"resultado": "Precio de la competencia: $2200/bidón", "fuentes": ["https://ejemplo.cl"]}
+        resultado = _execute_tool("web_search", {"query": "precio bidones agua Puente Alto"}, [], {})
+        assert "resultado" in resultado
+        assert "fuentes" in resultado
+        mock_buscar.assert_called_once_with("precio bidones agua Puente Alto")
+
+
 def test_get_customer_risk_devuelve_estructura_real():
     resultado = _execute_tool("get_customer_risk", {}, [], {})
     assert "resumen" in resultado
