@@ -411,19 +411,6 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_building_opportunities",
-            "description": (
-                "Detecta direcciones (edificios/condominios) donde 3 o más clientes distintos "
-                "piden individualmente — oportunidad real de contrato mayorista único. Llama "
-                "cuando el usuario pregunta por oportunidades de contratos grandes, edificios, "
-                "o condominios."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1186,10 +1173,6 @@ def _execute_tool(
         if name == "get_channel_comparison":
             from services.channel_comparison_service import comparar_canales
             return comparar_canales(pedidos_cache or [])
-
-        if name == "get_building_opportunities":
-            from services.building_opportunity_service import detectar_oportunidad_edificio
-            return detectar_oportunidad_edificio(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
