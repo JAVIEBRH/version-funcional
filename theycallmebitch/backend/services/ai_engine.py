@@ -387,6 +387,18 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_payment_risk_analysis",
+            "description": (
+                "Tasa real de cancelación/fallo de pedidos por método de pago (transferencia, "
+                "efectivo, tarjeta). Llama cuando el usuario pregunta por riesgo de cobranza, "
+                "métodos de pago problemáticos, o pedidos cancelados."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1141,6 +1153,10 @@ def _execute_tool(
             }
             precio_combustible = obtener_precio_bencina().get("precio_litro", 1200)
             return detectar_fuga_margen(zonas_data, precio_combustible_litro=precio_combustible)
+
+        if name == "get_payment_risk_analysis":
+            from services.payment_risk_service import analizar_riesgo_pago
+            return analizar_riesgo_pago(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
