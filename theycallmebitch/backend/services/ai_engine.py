@@ -436,6 +436,19 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_seasonal_churn_classification",
+            "description": (
+                "Clasifica a los clientes inactivos entre 'estacional' (patrón de inactividad "
+                "que se repite todos los años en la misma época, ej. vuelve cada verano) y "
+                "'real' (perdido sin patrón). Llama cuando el usuario pregunta si un cliente "
+                "inactivo realmente se perdió o va a volver."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1206,6 +1219,13 @@ def _execute_tool(
         if name == "get_activation_rate":
             from services.activation_service import calcular_tasa_activacion
             return calcular_tasa_activacion(pedidos_cache or [])
+
+        if name == "get_seasonal_churn_classification":
+            from services.seasonal_churn_service import clasificar_churn_estacional
+            from services.customer_risk_service import calcular_riesgo_clientes
+            riesgo = calcular_riesgo_clientes(pedidos_cache or [])
+            inactivos = [c for c in riesgo.get("clientes", []) if c.get("estado") == "inactivo"]
+            return clasificar_churn_estacional(pedidos_cache or [], inactivos)
 
         return {"error": f"Tool desconocida: {name}"}
 
