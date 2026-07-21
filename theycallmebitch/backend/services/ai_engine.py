@@ -360,6 +360,20 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_growth_opportunities",
+            "description": (
+                "Clientes cuya frecuencia de compra reciente (últimos 60 días) aumentó "
+                "significativamente respecto a su patrón histórico — señal real de negocio "
+                "creciendo, candidatos a ofrecerles un plan mayor. Llama cuando el usuario "
+                "pregunta por oportunidades de crecimiento, upsell, o clientes que están "
+                "comprando más."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1092,6 +1106,10 @@ def _execute_tool(
         if name == "get_route_intelligence":
             from services.route_intelligence_service import analizar_densidad_geografica
             return analizar_densidad_geografica(pedidos_cache or [])
+
+        if name == "get_growth_opportunities":
+            from services.opportunity_service import detectar_oportunidades_crecimiento
+            return detectar_oportunidades_crecimiento(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
