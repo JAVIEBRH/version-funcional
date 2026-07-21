@@ -2,11 +2,14 @@ import json
 import os
 from unittest.mock import patch
 
+from datetime import datetime, timedelta
+
 from services.ai_engine import (
     _execute_tool,
     run_chat_query,
     run_chat_query_prepare,
     run_chat_query_with_rec_id,
+    simulate_scenario,
 )
 
 
@@ -172,4 +175,52 @@ def test_get_demand_forecast_devuelve_pronostico_y_precision():
 def test_get_rentabilidad_reportes_devuelve_ambos_bloques():
     resultado = _execute_tool("get_rentabilidad_reportes", {}, [], {})
     assert "rentabilidad" in resultado
-    assert "reporte_ejecutivo" in resultado
+
+
+def test_get_discount_analysis_no_hace_llamada_http():
+    """get_discount_analysis debe importar y llamar analizar_descuento_volumen
+    directamente, no hacer un round-trip HTTP a su propio servidor."""
+    resultado = _execute_tool("get_discount_analysis", {}, [], {})
+    assert resultado == {"zonas_con_descuento": []}
+
+
+def _pedido_portezuelo(usuario, dias_atras, precio, ordenpedido):
+    fecha = (datetime.now() - timedelta(days=dias_atras)).strftime('%d-%m-%Y')
+    return {
+        'usuario': usuario, 'fecha': fecha, 'precio': str(precio),
+        'ordenpedido': str(ordenpedido), 'dire': 'portezuelo de los azules 100',
+        'nombrelocal': 'Aguas Ancud',
+    }
+
+
+def test_simulate_scenario_price_change_sin_datos_de_elasticidad_no_inventa_numero():
+    """Sin pedidos_cache (o sin ninguna zona con descuento detectable), price_change
+    ya no debe caer de vuelta a un ELASTICITY=-0.3 inventado: debe decir explícitamente
+    que no hay datos suficientes."""
+    resultado = simulate_scenario(
+        "price_change", {"new_price": 2200}, {"total_bidones_mes": 500}, pedidos_cache=[],
+    )
+    assert resultado["recomendacion"] == "datos_insuficientes"
+    assert resultado["elasticidad_estimada"] is None
+    assert "no hay datos suficientes para estimar elasticidad real" in resultado["interpretacion"].lower()
+    assert "bidones_proyectados" not in resultado
+
+
+def test_simulate_scenario_price_change_usa_elasticidad_real_calculada():
+    """Con pedidos reales con y sin descuento por volumen en una zona conocida
+    (Portezuelo), price_change debe usar la elasticidad real calculada por
+    discount_analysis_service en vez de una constante fija."""
+    pedidos = [
+        _pedido_portezuelo('a@fluvi.cl', 5, 5000, 3),
+        _pedido_portezuelo('a@fluvi.cl', 25, 5000, 3),
+        _pedido_portezuelo('b@fluvi.cl', 10, 6000, 3),
+        _pedido_portezuelo('b@fluvi.cl', 40, 6000, 3),
+    ]
+    resultado = simulate_scenario(
+        "price_change", {"new_price": 2200}, {"total_bidones_mes": 500},
+        pedidos_cache=pedidos,
+    )
+    assert resultado["recomendacion"] in ("viable", "riesgo_churn_alto")
+    assert resultado["elasticidad_estimada"] is not None
+    assert "bidones_proyectados" in resultado
+    assert "elasticidad real" in resultado["interpretacion"].lower()

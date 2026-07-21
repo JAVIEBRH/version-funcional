@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 PRECIO_BIDON      = 2000
 CAPACITY_MAX      = 1500    # bidones/mes
 FUEL_COST_PER_KM  = 200     # CLP/km (estimado)
-ELASTICITY        = -0.3    # elasticidad precio-demanda (agua = bien básico)
 DRIVER_COST_TRIP  = 2500    # CLP/viaje en costo de tiempo extra del chofer
+# Nota: la elasticidad precio-demanda ya NO es una constante inventada.
+# `simulate_scenario(action="price_change")` la calcula en tiempo real desde
+# pedidos reales con/sin descuento por volumen — ver discount_analysis_service.py.
 
 # ─── Caché en memoria ─────────────────────────────────────────────────────────
 CHAT_CACHE: dict = {}
@@ -330,6 +332,20 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_discount_analysis",
+            "description": (
+                "Compara pedidos con descuento por volumen (ej. paquete de 3 bidones a precio "
+                "reducido en zonas como Portezuelo) contra pedidos a precio normal, dentro de la "
+                "misma zona: frecuencia, ticket, y una elasticidad estimada real. Llama cuando "
+                "el usuario pregunta sobre el efecto de descuentos, promociones por volumen, "
+                "o elasticidad de precio."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -592,7 +608,7 @@ def _compress_if_needed(conversation: list, client: OpenAI) -> list:
 
 
 # ─── Simulador financiero (puro Python, sin IA) ───────────────────────────────
-def simulate_scenario(action: str, params: dict, context_data: dict) -> dict:
+def simulate_scenario(action: str, params: dict, context_data: dict, pedidos_cache: list = None) -> dict:
     ctx = context_data
     ticket = ctx.get("ticket_promedio", PRECIO_BIDON)
 
@@ -673,7 +689,31 @@ def simulate_scenario(action: str, params: dict, context_data: dict) -> dict:
         bidones    = ctx.get("total_bidones_mes", 500)
         costos     = ctx.get("costos_operativos", 0)
         delta_pct  = (new_price - PRECIO_BIDON) / PRECIO_BIDON * 100
-        dem_change = ELASTICITY * delta_pct
+
+        from services.discount_analysis_service import analizar_descuento_volumen
+        analisis_descuento = analizar_descuento_volumen(pedidos_cache or [])
+        elasticidades = [
+            z["elasticidad_estimada"]
+            for z in analisis_descuento.get("zonas_con_descuento", [])
+            if z.get("elasticidad_estimada") is not None
+        ]
+        elasticidad_real = round(float(sum(elasticidades)) / len(elasticidades), 2) if elasticidades else None
+
+        if elasticidad_real is None:
+            return {
+                "precio_actual":  PRECIO_BIDON,
+                "precio_nuevo":   new_price,
+                "cambio_precio_pct": round(delta_pct, 1),
+                "elasticidad_estimada": None,
+                "recomendacion": "datos_insuficientes",
+                "interpretacion": (
+                    "No hay datos suficientes para estimar elasticidad real todavía. "
+                    "Se necesitan pedidos con y sin descuento por volumen en al menos una zona "
+                    "(ej. Portezuelo) para calcular cómo responde la demanda a un cambio de precio."
+                ),
+            }
+
+        dem_change = elasticidad_real * delta_pct
         new_bid    = round(bidones * (1 + dem_change / 100))
         new_rev    = new_bid * new_price
         old_rev    = bidones * PRECIO_BIDON
@@ -683,14 +723,16 @@ def simulate_scenario(action: str, params: dict, context_data: dict) -> dict:
             "precio_actual":               PRECIO_BIDON,
             "precio_nuevo":                new_price,
             "cambio_precio_pct":           round(delta_pct, 1),
+            "elasticidad_estimada":        elasticidad_real,
             "bidones_proyectados":         new_bid,
             "revenue_proyectado":          round(new_rev),
             "delta_revenue_mensual":       round(delta_rev),
             "nuevo_punto_equilibrio":      new_eq,
             "recomendacion":               "viable" if delta_rev > 0 else "riesgo_churn_alto",
             "interpretacion": (
-                f"Precio ${new_price}: demanda estimada baja {abs(dem_change):.1f}% → "
-                f"{new_bid} bidones/mes, revenue ${new_rev:,.0f} "
+                f"Precio ${new_price}: demanda estimada baja {abs(dem_change):.1f}% "
+                f"(elasticidad real {elasticidad_real}, calculada desde pedidos con/sin descuento "
+                f"por volumen) → {new_bid} bidones/mes, revenue ${new_rev:,.0f} "
                 f"({'↑' if delta_rev >= 0 else '↓'}${abs(delta_rev):,.0f} vs actual)."
             ),
         }
@@ -979,7 +1021,7 @@ def _execute_tool(
                 return {"error": "Inventario no disponible"}
 
         if name == "simulate_scenario":
-            return simulate_scenario(args["action"], args.get("params", {}), context_data)
+            return simulate_scenario(args["action"], args.get("params", {}), context_data, pedidos_cache)
 
         if name == "draft_campaign_message":
             return draft_campaign_message(
@@ -1027,6 +1069,10 @@ def _execute_tool(
             except Exception as e:
                 logger.error(f"Error en get_rentabilidad_reportes: {e}")
                 return {"error": "No se pudo obtener el análisis de rentabilidad"}
+
+        if name == "get_discount_analysis":
+            from services.discount_analysis_service import analizar_descuento_volumen
+            return analizar_descuento_volumen(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
