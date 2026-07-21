@@ -506,7 +506,10 @@ REGLAS ABSOLUTAS:
 5. Incorpora el clima: lluvia o calor extremo afecta demanda.
 6. Si hay insights anteriores, NO los repitas — genera perspectiva nueva.
 7. Calcula impacto económico en CLP con número exacto.
-8. El output DEBE SER UN ARREGLO JSON válido (sin marcas markdown), con 2-3 objetos con esta estructura exacta:
+8. TRAZABILIDAD OBLIGATORIA: En cada alerta o insight, el campo "message" DEBE incluir brevemente
+   la fuente del cálculo (ej. "según RFM de últimos 30 días" o "comparando tendencia con mes anterior").
+   Nunca presentes un número sin indicar de dónde viene.
+9. El output DEBE SER UN ARREGLO JSON válido (sin marcas markdown), con 2-3 objetos con esta estructura exacta:
 [
   {{
     "type": "alert" | "opportunity" | "zone" | "churn" | "weather",
@@ -569,11 +572,14 @@ REGLAS ABSOLUTAS:
 6. Si el usuario pide simular algo: llama a simulate_scenario() y muestra los números.
 7. Calcula siempre el impacto en CLP con aritmética exacta de los datos.
 8. Usa el historial de conversación para respuestas de seguimiento coherentes.
-9. Responde SIEMPRE en markdown con exactamente estas 4 secciones:
-   **Diagnóstico:** ¿Qué muestran los datos?
-   **Causa:** ¿Por qué está pasando?
-   **Acción:** ¿Qué hacer con urgencia (próximas 24h)?
-   **Impacto:** ¿Cuánto vale resolver esto (en CLP)?"""
+9. TRAZABILIDAD OBLIGATORIA: cada vez que menciones un número o recomendación, indica brevemente
+   de qué cálculo salió (ej. "según la cadencia personal de este cliente, calculada sobre sus últimos N pedidos"
+   o "comparando pedidos con y sin descuento en Portezuelo"). Nunca presentes un número sin decir de dónde sale.
+10. Responde SIEMPRE en markdown con exactamente estas 4 secciones:
+    **Diagnóstico:** ¿Qué muestran los datos?
+    **Causa:** ¿Por qué está pasando?
+    **Acción:** ¿Qué hacer con urgencia (próximas 24h)?
+    **Impacto:** ¿Cuánto vale resolver esto (en CLP)?"""
 
 # ─── Plantillas de mensajes WhatsApp ──────────────────────────────────────────
 _WA_TEMPLATES = {
