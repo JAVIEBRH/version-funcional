@@ -975,10 +975,35 @@ def run_chat_query(
     En caso de fallo de OpenAI (rate limit, timeout, etc.) retorna en su lugar
     un dict estructurado `{"error": True, "mensaje": "..."}` con un mensaje
     genérico y seguro para mostrar al usuario, en vez de la excepción cruda.
+
+    Delgado (thin wrapper) sobre `run_chat_query_with_rec_id` — preserva el
+    contrato histórico de esta función (Task 2) de retornar solo `str | dict`,
+    descartando el `rec_id`. Los llamadores que necesiten el `rec_id` (p.ej.
+    `main.py` en `/chat`) deben usar `run_chat_query_with_rec_id` directamente.
+    """
+    respuesta, _rec_id = run_chat_query_with_rec_id(
+        context_data, question, history=history, pedidos_cache=pedidos_cache
+    )
+    return respuesta
+
+
+def run_chat_query_with_rec_id(
+    context_data: dict,
+    question: str,
+    history: list = None,
+    pedidos_cache: list = None,
+) -> tuple:
+    """Igual que `run_chat_query`, pero retorna una tupla `(respuesta, rec_id)`.
+
+    `rec_id` es el id entero de la última recomendación persistida por
+    `memory_service.guardar_recomendacion` durante esta consulta (generada por
+    `draft_campaign_message` o `simulate_scenario`), o `None` si no se generó
+    ninguna recomendación (incluye el caso de respuesta desde caché, donde no
+    se vuelve a ejecutar ninguna tool).
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return "El Agente no está configurado (API Key faltante)."
+        return "El Agente no está configurado (API Key faltante).", None
 
     client   = OpenAI(api_key=api_key)
     core_ctx = _build_core_context(context_data)
@@ -988,7 +1013,7 @@ def run_chat_query(
     cache_key = _make_cache_key(question, core_ctx)
     if cache_key in CHAT_CACHE:
         logger.info("Respuesta desde caché.")
-        return CHAT_CACHE[cache_key]
+        return CHAT_CACHE[cache_key], None
 
     # Seleccionar tools según intento
     intent = _classify_intent(question)
@@ -1011,6 +1036,7 @@ def run_chat_query(
 
     tools_used: list = []
     used_no_cache_tool = False
+    rec_id = None
 
     for _ in range(5):
         try:
@@ -1024,7 +1050,7 @@ def run_chat_query(
             )
         except Exception as e:
             logger.error(f"Error OpenAI en chat: {e}")
-            return {"error": True, "mensaje": "No pude conectarme con el servicio de análisis. Intenta de nuevo en un momento."}
+            return {"error": True, "mensaje": "No pude conectarme con el servicio de análisis. Intenta de nuevo en un momento."}, None
 
         choice = response.choices[0]
 
@@ -1032,7 +1058,7 @@ def run_chat_query(
             answer = choice.message.content or ""
             if not used_no_cache_tool:
                 CHAT_CACHE[cache_key] = answer
-            return answer
+            return answer, rec_id
 
         if choice.finish_reason == "tool_calls":
             # Añadir mensaje del asistente con tool_calls
@@ -1070,11 +1096,13 @@ def run_chat_query(
                 if name in ("draft_campaign_message", "simulate_scenario"):
                     try:
                         from services.memory_service import guardar_recomendacion
-                        guardar_recomendacion({
+                        nuevo_id = guardar_recomendacion({
                             "tipo": name,
                             "zona": tool_args.get("segment", tool_args.get("action", "general")),
                             "descripcion": json.dumps(result, ensure_ascii=False)[:400],
                         })
+                        if isinstance(nuevo_id, int) and nuevo_id > 0:
+                            rec_id = nuevo_id
                     except Exception:
                         pass
 
@@ -1084,7 +1112,7 @@ def run_chat_query(
                     "content": json.dumps(result, ensure_ascii=False),
                 })
 
-    return "No se pudo completar el análisis en el tiempo límite."
+    return "No se pudo completar el análisis en el tiempo límite.", rec_id
 
 
 # ─── run_chat_query_prepare — para streaming (sin llamada final) ──────────────
@@ -1096,11 +1124,15 @@ def run_chat_query_prepare(
 ) -> tuple:
     """
     Ejecuta el loop de tools silenciosamente.
-    Retorna (conversation_lista, tools_used_lista) listos para la llamada final con stream=True.
+    Retorna (conversation_lista, tools_used_lista, rec_id) listos para la llamada
+    final con stream=True. `rec_id` es el id entero de la última recomendación
+    persistida por `memory_service.guardar_recomendacion` durante esta consulta
+    (generada por `draft_campaign_message` o `simulate_scenario`), o `None` si
+    no se generó ninguna.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return [], []
+        return [], [], None
 
     client   = OpenAI(api_key=api_key)
     core_ctx = _build_core_context(context_data)
@@ -1120,6 +1152,7 @@ def run_chat_query_prepare(
     conversation = _compress_if_needed(conversation, client)
 
     tools_used: list = []
+    rec_id = None
 
     for _ in range(5):
         try:
@@ -1133,13 +1166,13 @@ def run_chat_query_prepare(
             )
         except Exception as e:
             logger.error(f"Error prepare: {e}")
-            return conversation, tools_used
+            return conversation, tools_used, rec_id
 
         choice = response.choices[0]
 
         if choice.finish_reason == "stop":
             # La conversación está lista para ser re-llamada con stream=True
-            return conversation, tools_used
+            return conversation, tools_used, rec_id
 
         if choice.finish_reason == "tool_calls":
             conversation.append({
@@ -1168,11 +1201,13 @@ def run_chat_query_prepare(
                 if name in ("draft_campaign_message", "simulate_scenario"):
                     try:
                         from services.memory_service import guardar_recomendacion
-                        guardar_recomendacion({
+                        nuevo_id = guardar_recomendacion({
                             "tipo": name,
                             "zona": tool_args.get("segment", tool_args.get("action", "general")),
                             "descripcion": json.dumps(result, ensure_ascii=False)[:400],
                         })
+                        if isinstance(nuevo_id, int) and nuevo_id > 0:
+                            rec_id = nuevo_id
                     except Exception:
                         pass
 
@@ -1182,7 +1217,7 @@ def run_chat_query_prepare(
                     "content": json.dumps(result, ensure_ascii=False),
                 })
 
-    return conversation, tools_used
+    return conversation, tools_used, rec_id
 
 
 # ─── run_autonomous_insight — loop de background (sin cambios) ────────────────

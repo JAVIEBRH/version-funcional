@@ -260,11 +260,14 @@ const ChatAssistant = ({ darkMode }) => {
         });
         const data = await res2.json();
         const esError = data.response && typeof data.response === 'object' && data.response.error;
+        const fallbackRecId = data.rec_id || null;
         setMessages(prev => [...prev, {
           role: 'agent',
           content: esError ? data.response.mensaje : data.response,
           isError: !!esError,
+          recId: fallbackRecId,
         }]);
+        if (fallbackRecId) setFeedbackId(fallbackRecId);
       } catch {
         setMessages(prev => [...prev, { role: 'agent', content: 'Error de conexión con el servicio estratégico.', isError: true }]);
       }

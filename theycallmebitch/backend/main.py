@@ -24,7 +24,11 @@ logger = logging.getLogger(__name__)
 from models import Order, OrderResponse, OrderCreate, convert_legacy_order, order_to_response
 from data_adapter import data_adapter
 from pydantic import BaseModel
-from services.ai_engine import run_autonomous_insight, run_chat_query, run_chat_query_prepare
+from services.ai_engine import (
+    run_autonomous_insight,
+    run_chat_query_prepare,
+    run_chat_query_with_rec_id,
+)
 from services.business_context import build_business_context
 from services.rfm_engine import calcular_rfm
 from services.zone_engine import analizar_zonas
@@ -785,7 +789,9 @@ def chat_with_agent(req: ChatRequest):
         pedidos  = data_adapter.obtener_pedidos_combinados()
         context  = _build_full_context()
         history  = [{"role": m.role, "content": m.content} for m in req.history]
-        respuesta = run_chat_query(context, req.message, history=history, pedidos_cache=pedidos)
+        respuesta, rec_id = run_chat_query_with_rec_id(
+            context, req.message, history=history, pedidos_cache=pedidos
+        )
 
         try:
             with open("chat_history.log", "a", encoding="utf-8") as f:
@@ -794,7 +800,7 @@ def chat_with_agent(req: ChatRequest):
         except Exception:
             pass
 
-        return {"response": respuesta}
+        return {"response": respuesta, "rec_id": rec_id}
     except Exception as e:
         logger.error(f"Error en /chat: {e}")
         return {"response": {"error": True, "mensaje": "No pude procesar tu consulta. Intenta de nuevo."}}
@@ -810,7 +816,7 @@ async def chat_stream(req: ChatRequest):
             history = [{"role": m.role, "content": m.content} for m in req.history]
 
             # Fase A: resolver tools silenciosamente
-            final_conv, tools_used = await asyncio.to_thread(
+            final_conv, tools_used, rec_id = await asyncio.to_thread(
                 run_chat_query_prepare,
                 context, req.message, history, pedidos,
             )
@@ -867,7 +873,7 @@ async def chat_stream(req: ChatRequest):
 
             # Meta final (is_campaign, tools usados)
             is_campaign = "draft_campaign_message" in tools_used
-            yield f"data: {json.dumps({'meta': {'tools_used': tools_used, 'is_campaign': is_campaign}})}\n\n"
+            yield f"data: {json.dumps({'meta': {'tools_used': tools_used, 'is_campaign': is_campaign, 'rec_id': rec_id}})}\n\n"
 
             yield "data: [DONE]\n\n"
 
