@@ -294,6 +294,29 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_demand_forecast",
+            "description": (
+                "Pronóstico real de demanda (modelo XGBoost, mismo que usa el módulo Predictor) "
+                "para los próximos días, con rango P10-P90 y precisión histórica real (MAPE). "
+                "Llama cuando el usuario pregunta cuánto va a vender, cuánta demanda esperar, "
+                "o quiere planificar abastecimiento."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dias": {
+                        "type": "integer",
+                        "description": "Días a pronosticar. Por defecto 7.",
+                        "default": 7,
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -973,6 +996,13 @@ def _execute_tool(
         if name == "get_customer_risk":
             from services.customer_risk_service import calcular_riesgo_clientes
             return calcular_riesgo_clientes(pedidos_cache or [])
+
+        if name == "get_demand_forecast":
+            from services.demand_forecast_service import predecir_proximos_dias, validar_precision
+            dias = min(int(args.get("dias", 7)), 30)
+            pronostico = predecir_proximos_dias(pedidos_cache or [], dias=dias)
+            precision = validar_precision(pedidos_cache or [], dias_test=30)
+            return {"pronostico": pronostico, "precision_historica": precision}
 
         return {"error": f"Tool desconocida: {name}"}
 

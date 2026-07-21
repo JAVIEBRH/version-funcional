@@ -161,3 +161,9 @@ def test_get_customer_risk_devuelve_estructura_real():
     assert "resumen" in resultado
     assert "clientes" in resultado
     assert set(resultado["resumen"].keys()) == {"activos", "en_riesgo", "inactivos"}
+
+
+def test_get_demand_forecast_devuelve_pronostico_y_precision():
+    resultado = _execute_tool("get_demand_forecast", {}, [], {})
+    assert "pronostico" in resultado
+    assert "precision_historica" in resultado
