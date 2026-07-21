@@ -618,7 +618,7 @@ _WA_TEMPLATES = {
 
 # ─── Clasificación de intento ─────────────────────────────────────────────────
 _INTENT_TOOLS = {
-    "zone":       ["get_zone_analysis", "get_route_intelligence"],
+    "zone":       ["get_zone_analysis", "get_route_intelligence", "get_margin_leak_analysis"],
     "rfm":        [
         "get_customer_segments", "draft_campaign_message",
         "get_customer_risk", "get_activation_rate",
@@ -631,7 +631,7 @@ _INTENT_TOOLS = {
     "trends":     ["get_trends"],
     "daily":      ["get_daily_cashflow", "get_kpis"],
     "inventory":  ["get_inventory", "get_kpis", "get_demand_forecast"],
-    "expansion":  ["recommend_expansion", "get_kpis", "get_zone_analysis", "get_channel_comparison"],
+    "expansion":  ["recommend_expansion", "get_kpis", "get_zone_analysis", "get_channel_comparison", "get_discount_analysis", "get_growth_opportunities"],
 }
 
 

@@ -79,3 +79,24 @@ def test_web_search_no_se_cachea():
 
 def test_get_demand_forecast_no_se_cachea():
     assert "get_demand_forecast" in NO_CACHE_TOOLS
+
+
+def test_pregunta_descuento_volumen_enruta_a_expansion_e_incluye_discount_analysis():
+    """Collision fix: 'volumen' keyword matches expansion intent, must include get_discount_analysis."""
+    names, intent = _tool_names_for("¿me conviene la promoción por volumen del paquete de 3 bidones?")
+    assert intent == "expansion"
+    assert "get_discount_analysis" in names
+
+
+def test_pregunta_fuga_zona_enruta_a_zone_e_incluye_margin_leak_analysis():
+    """Collision fix: 'zona' keyword matches zone intent first, must include get_margin_leak_analysis."""
+    names, intent = _tool_names_for("¿en qué zona se me va el margen?")
+    assert intent == "zone"
+    assert "get_margin_leak_analysis" in names
+
+
+def test_pregunta_oportunidades_crecer_enruta_a_expansion_e_incluye_growth_opportunities():
+    """Collision fix: 'crecer' keyword matches expansion intent, must include get_growth_opportunities."""
+    names, intent = _tool_names_for("¿dónde puedo crecer más en el negocio?")
+    assert intent == "expansion"
+    assert "get_growth_opportunities" in names
