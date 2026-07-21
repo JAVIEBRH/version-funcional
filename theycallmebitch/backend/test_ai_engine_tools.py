@@ -175,6 +175,7 @@ def test_get_demand_forecast_devuelve_pronostico_y_precision():
 def test_get_rentabilidad_reportes_devuelve_ambos_bloques():
     resultado = _execute_tool("get_rentabilidad_reportes", {}, [], {})
     assert "rentabilidad" in resultado
+    assert "reporte_ejecutivo" in resultado
 
 
 def test_get_discount_analysis_no_hace_llamada_http():
