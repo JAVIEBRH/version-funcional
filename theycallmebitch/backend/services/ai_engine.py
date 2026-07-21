@@ -317,6 +317,19 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_rentabilidad_reportes",
+            "description": (
+                "Análisis de rentabilidad avanzado y reporte ejecutivo semanal, ambos ya "
+                "calculados por el backend pero nunca antes disponibles en el chat. Llama "
+                "cuando el usuario pide un análisis de rentabilidad detallado o un reporte "
+                "ejecutivo del negocio."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1003,6 +1016,17 @@ def _execute_tool(
             pronostico = predecir_proximos_dias(pedidos_cache or [], dias=dias)
             precision = validar_precision(pedidos_cache or [], dias_test=30)
             return {"pronostico": pronostico, "precision_historica": precision}
+
+        if name == "get_rentabilidad_reportes":
+            try:
+                from main import get_analisis_rentabilidad, get_reporte_ejecutivo
+                return {
+                    "rentabilidad": get_analisis_rentabilidad(),
+                    "reporte_ejecutivo": get_reporte_ejecutivo(),
+                }
+            except Exception as e:
+                logger.error(f"Error en get_rentabilidad_reportes: {e}")
+                return {"error": "No se pudo obtener el análisis de rentabilidad"}
 
         return {"error": f"Tool desconocida: {name}"}
 
