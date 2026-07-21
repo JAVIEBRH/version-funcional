@@ -346,6 +346,20 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_route_intelligence",
+            "description": (
+                "Densidad geográfica real de pedidos (agrupados por celda de ~1km usando "
+                "coordenadas reales geocodificadas), para detectar concentraciones de pedidos "
+                "que las 3 zonas fijas actuales no capturan bien. Llama cuando el usuario "
+                "pregunta por oportunidades de ruta, zonas sin explotar, o dónde concentrar "
+                "reparto."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1074,6 +1088,10 @@ def _execute_tool(
         if name == "get_discount_analysis":
             from services.discount_analysis_service import analizar_descuento_volumen
             return analizar_descuento_volumen(pedidos_cache or [])
+
+        if name == "get_route_intelligence":
+            from services.route_intelligence_service import analizar_densidad_geografica
+            return analizar_densidad_geografica(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
