@@ -19,3 +19,19 @@ def test_calcula_tasa_de_cancelacion_por_metodo():
 
 def test_lista_vacia_no_rompe():
     assert analizar_riesgo_pago([]) == {'metodos': []}
+
+
+def test_sin_columna_status_no_rompe():
+    """Regresión: ordenes sin columna 'status' no deben causar crash."""
+    pedidos = [
+        {'metodopago': 'transferencia', 'nombrelocal': 'Aguas Ancud'},
+        {'metodopago': 'transferencia', 'nombrelocal': 'Aguas Ancud'},
+        {'metodopago': 'efectivo', 'nombrelocal': 'Aguas Ancud'},
+    ]
+    resultado = analizar_riesgo_pago(pedidos)
+    assert 'metodos' in resultado
+    assert len(resultado['metodos']) > 0
+    # Sin columna 'status', ninguna orden debe ser marcada como fallida
+    for metodo in resultado['metodos']:
+        assert metodo['pedidos_fallidos'] == 0
+        assert metodo['tasa_cancelacion_pct'] == 0

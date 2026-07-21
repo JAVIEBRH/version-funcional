@@ -25,7 +25,12 @@ def analizar_riesgo_pago(pedidos: List[Dict]) -> Dict:
 
     df['metodo_norm'] = df['metodopago'].astype(str).str.strip().str.lower()
     df = df[df['metodo_norm'] != '']
-    df['es_fallido'] = df.get('status', '').astype(str).str.strip().str.lower().isin(ESTADOS_FALLIDOS)
+
+    if 'status' in df.columns:
+        estado_series = df['status'].astype(str).str.strip().str.lower()
+    else:
+        estado_series = pd.Series('', index=df.index)
+    df['es_fallido'] = estado_series.isin(ESTADOS_FALLIDOS)
 
     resultado = []
     for metodo, grupo in df.groupby('metodo_norm'):
