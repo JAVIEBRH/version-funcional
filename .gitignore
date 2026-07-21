@@ -202,4 +202,7 @@ venv.bak/
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json .claude/
+dmypy.json
+
+# Claude Code plugin data
+.claude/
