@@ -199,7 +199,8 @@ def test_simulate_scenario_price_change_sin_datos_de_elasticidad_no_inventa_nume
     ya no debe caer de vuelta a un ELASTICITY=-0.3 inventado: debe decir explícitamente
     que no hay datos suficientes."""
     resultado = simulate_scenario(
-        "price_change", {"new_price": 2200}, {"total_bidones_mes": 500}, pedidos_cache=[],
+        "price_change", {"new_price": 2200},
+        {"total_bidones_mes": 500, "pedidos_cache": []},
     )
     assert resultado["recomendacion"] == "datos_insuficientes"
     assert resultado["elasticidad_estimada"] is None
@@ -218,8 +219,8 @@ def test_simulate_scenario_price_change_usa_elasticidad_real_calculada():
         _pedido_portezuelo('b@fluvi.cl', 40, 6000, 3),
     ]
     resultado = simulate_scenario(
-        "price_change", {"new_price": 2200}, {"total_bidones_mes": 500},
-        pedidos_cache=pedidos,
+        "price_change", {"new_price": 2200},
+        {"total_bidones_mes": 500, "pedidos_cache": pedidos},
     )
     assert resultado["recomendacion"] in ("viable", "riesgo_churn_alto")
     assert resultado["elasticidad_estimada"] is not None

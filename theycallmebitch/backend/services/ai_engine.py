@@ -608,7 +608,7 @@ def _compress_if_needed(conversation: list, client: OpenAI) -> list:
 
 
 # ─── Simulador financiero (puro Python, sin IA) ───────────────────────────────
-def simulate_scenario(action: str, params: dict, context_data: dict, pedidos_cache: list = None) -> dict:
+def simulate_scenario(action: str, params: dict, context_data: dict) -> dict:
     ctx = context_data
     ticket = ctx.get("ticket_promedio", PRECIO_BIDON)
 
@@ -691,7 +691,7 @@ def simulate_scenario(action: str, params: dict, context_data: dict, pedidos_cac
         delta_pct  = (new_price - PRECIO_BIDON) / PRECIO_BIDON * 100
 
         from services.discount_analysis_service import analizar_descuento_volumen
-        analisis_descuento = analizar_descuento_volumen(pedidos_cache or [])
+        analisis_descuento = analizar_descuento_volumen(ctx.get("pedidos_cache") or [])
         elasticidades = [
             z["elasticidad_estimada"]
             for z in analisis_descuento.get("zonas_con_descuento", [])
@@ -1021,7 +1021,8 @@ def _execute_tool(
                 return {"error": "Inventario no disponible"}
 
         if name == "simulate_scenario":
-            return simulate_scenario(args["action"], args.get("params", {}), context_data, pedidos_cache)
+            scenario_context = {**context_data, "pedidos_cache": pedidos_cache}
+            return simulate_scenario(args["action"], args.get("params", {}), scenario_context)
 
         if name == "draft_campaign_message":
             return draft_campaign_message(
