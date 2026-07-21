@@ -411,6 +411,18 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sla_compliance",
+            "description": (
+                "% real de pedidos entregados dentro de la ventana horaria prometida al "
+                "cliente. Llama cuando el usuario pregunta por puntualidad de entrega, "
+                "cumplimiento de horario, o calidad de servicio de reparto."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 # ─── System Prompts ────────────────────────────────────────────────────────────
@@ -1173,6 +1185,10 @@ def _execute_tool(
         if name == "get_channel_comparison":
             from services.channel_comparison_service import comparar_canales
             return comparar_canales(pedidos_cache or [])
+
+        if name == "get_sla_compliance":
+            from services.sla_compliance_service import calcular_cumplimiento_horario
+            return calcular_cumplimiento_horario(pedidos_cache or [])
 
         return {"error": f"Tool desconocida: {name}"}
 
